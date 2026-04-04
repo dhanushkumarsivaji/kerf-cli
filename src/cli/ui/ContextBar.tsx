@@ -11,7 +11,8 @@ interface ContextBarProps {
 export function ContextBar({ used, total, overhead }: ContextBarProps) {
   const barWidth = 30;
   const usedPct = total > 0 ? (used / total) * 100 : 0;
-  const filledCount = Math.round((usedPct / 100) * barWidth);
+  const clampedPct = Math.max(0, Math.min(usedPct, 100));
+  const filledCount = Math.round((clampedPct / 100) * barWidth);
   const emptyCount = barWidth - filledCount;
 
   const color = usedPct < 50 ? "green" : usedPct < 80 ? "yellow" : "red";
