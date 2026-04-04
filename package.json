@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Cost intelligence for Claude Code. Know before you spend.",
   "bin": {
-    "kerf": "./dist/cli/index.js"
+    "kerf": "./dist/index.js"
   },
   "scripts": {
     "build": "tsup",
