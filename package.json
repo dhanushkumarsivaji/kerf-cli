@@ -1,5 +1,5 @@
 {
-  "name": "kerf",
+  "name": "@dhanushkumars/kerf",
   "version": "0.1.0",
   "type": "module",
   "description": "Cost intelligence for Claude Code. Know before you spend.",
