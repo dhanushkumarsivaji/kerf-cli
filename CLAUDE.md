@@ -1,9 +1,9 @@
-# kerf — Claude Code Cost Intelligence
+# kerf-cli — Claude Code Cost Intelligence
 
 ## Project Overview
 TypeScript CLI tool providing real-time cost intelligence for Claude Code.
 Name origin: kerf = width of material removed by a cutting tool (token waste).
-Distributed via npx. Uses Ink (React for CLI) for terminal UI.
+Published as `kerf-cli` on npm. Distributed via `npx kerf-cli@latest`. Uses Ink (React for CLI) for terminal UI.
 
 ## Architecture
 - CLI: Commander.js for subcommands, Ink for interactive UI
