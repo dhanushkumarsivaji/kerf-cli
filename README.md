@@ -169,8 +169,8 @@ echo 'alias kerf="npx kerf-cli"' >> ~/.zshrc
 Contributions welcome! Please open an issue first to discuss what you'd like to change.
 
 ```bash
-git clone https://github.com/dhanushkumarsivaji/kerf.git
-cd kerf
+git clone https://github.com/dhanushkumarsivaji/kerf-cli.git
+cd kerf-cli
 npm install
 npm test
 ```
