@@ -5,13 +5,14 @@
 > *kerf (n.) — the width of material removed by a cutting tool. Every token operation has a kerf.*
 
 [![npm version](https://img.shields.io/npm/v/kerf-cli)](https://www.npmjs.com/package/kerf-cli)
+[![CI](https://github.com/dhanushkumarsivaji/kerf-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/dhanushkumarsivaji/kerf-cli/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node 20+](https://img.shields.io/badge/node-20%2B-green.svg)]()
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)]()
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  kerf-cli watch | session: a3f8c2d1... | 47 messages         │
+│  kerf watch | session: a3f8c2d1... | 47 messages             │
 ├──────────────────────────────────────────────────────────────┤
 │  >> $4.82 / ~$15.00 window | $0.18/min | ~56m remaining     │
 │  [████████████░░░░░░░░░░░░░░░░░░] 38% | 76K / 200K tokens   │
@@ -34,10 +35,15 @@ npx kerf-cli@latest watch     # Real-time cost dashboard
 npx kerf-cli@latest audit     # Find ghost token waste
 ```
 
-**Tip:** Add an alias for convenience:
+After global install (`npm i -g kerf-cli`), use the shorter `kerf` command:
+
 ```bash
-echo 'alias kerf="npx kerf-cli@latest"' >> ~/.zshrc
+kerf watch
+kerf estimate 'refactor auth'
+kerf audit
 ```
+
+> Both `kerf` and `kerf-cli` work as command names.
 
 ---
 
@@ -45,24 +51,25 @@ echo 'alias kerf="npx kerf-cli@latest"' >> ~/.zshrc
 
 > "20x Max plan exhausted in 19 minutes"
 
-Claude Code sessions burn through tokens fast — context overhead, MCP tools, bloated CLAUDE.md files — and there's no way to see it in real time. kerf-cli fixes that with live dashboards, pre-flight estimates, budgets, and ghost token auditing.
+Claude Code sessions burn through tokens fast — context overhead, MCP tools, bloated CLAUDE.md files — and there's no way to see it in real time. kerf fixes that with live dashboards, pre-flight estimates, budgets, and ghost token auditing.
 
 ---
 
 ## Installation
 
 ```bash
-# No install needed — run directly
+# No install needed — run directly via npx
 npx kerf-cli@latest --help
 
-# Or install globally
+# Or install globally for the shorter 'kerf' command
 npm install -g kerf-cli
+kerf --help
 ```
 
 ### First-time setup
 
 ```bash
-npx kerf-cli init
+kerf init
 ```
 
 Creates `~/.kerf/` directory, initializes the SQLite database, and optionally installs Claude Code hooks for automatic tracking.
@@ -73,12 +80,12 @@ Creates `~/.kerf/` directory, initializes the SQLite database, and optionally in
 
 ### Live monitoring (most common workflow)
 
-Run Claude Code in one tab, kerf-cli in another:
+Run Claude Code in one tab, kerf in another:
 
 ```
-Terminal Tab 1 (Claude Code):        Terminal Tab 2 (kerf-cli):
+Terminal Tab 1 (Claude Code):        Terminal Tab 2 (kerf):
 ┌──────────────────────────┐         ┌──────────────────────────┐
-│ $ claude                 │         │ $ npx kerf-cli watch     │
+│ $ claude                 │         │ $ kerf watch             │
 │                          │         │                          │
 │ > Fix the auth bug in    │         │ >> $1.20 / ~$8.00 window │
 │   src/auth/login.ts      │         │ [████░░░░░░] 18%         │
@@ -88,42 +95,42 @@ Terminal Tab 1 (Claude Code):        Terminal Tab 2 (kerf-cli):
 └──────────────────────────┘         └──────────────────────────┘
 ```
 
-kerf-cli auto-detects the active session. Press `q` to quit, `b` to toggle budget view.
+Auto-detects the active session. Press `q` to quit, `b` to toggle budget view.
 
 ### Before starting work
 
 ```bash
-npx kerf-cli estimate 'refactor the auth module'
-npx kerf-cli budget show
+kerf estimate 'refactor the auth module'
+kerf budget show
 ```
 
 ### End-of-day review
 
 ```bash
-npx kerf-cli report
-npx kerf-cli report --sessions
+kerf report
+kerf report --sessions
 ```
 
 ---
 
 ## Features
 
-### Real-Time Dashboard — `kerf-cli watch`
+### Real-Time Dashboard — `kerf watch`
 
 Live cost monitoring with burn rate, context usage, and projected costs. Refreshes every 2 seconds.
 
 ```bash
-npx kerf-cli watch                     # auto-find active session
-npx kerf-cli watch --session abc123    # specific session
-npx kerf-cli watch --interval 5000     # slower refresh
+kerf watch                     # auto-find active session
+kerf watch --session abc123    # specific session
+kerf watch --interval 5000     # slower refresh
 ```
 
-### Pre-Flight Estimation — `kerf-cli estimate`
+### Pre-Flight Estimation — `kerf estimate`
 
 Know what a task will cost before you start.
 
 ```bash
-$ npx kerf-cli estimate 'refactor auth module'
+$ kerf estimate 'refactor auth module'
 
 ╭──────────────────────────────────────────────────────────╮
 │  kerf-cli estimate: 'refactor auth module'               │
@@ -142,7 +149,7 @@ $ npx kerf-cli estimate 'refactor auth module'
 Compare all models side by side:
 
 ```bash
-$ npx kerf-cli estimate --compare 'add feature'
+$ kerf estimate --compare 'add feature'
 
   Model      Turns          Low          Expected     High
   ----------------------------------------------------------
@@ -154,7 +161,7 @@ $ npx kerf-cli estimate --compare 'add feature'
   Priciest: opus at $5.24
 ```
 
-Task complexity is detected from keywords:
+Task complexity is auto-detected from keywords:
 
 | Complexity | Keywords | Estimated Turns |
 |-----------|----------|-----------------|
@@ -163,20 +170,20 @@ Task complexity is detected from keywords:
 | Complex | refactor, rewrite, build, implement, migrate | 15-40 |
 
 ```bash
-npx kerf-cli estimate 'fix bug' --model opus           # specific model
-npx kerf-cli estimate 'add auth' --files 'src/auth/*'   # with file context
-npx kerf-cli estimate 'fix bug' --json                  # JSON output
+kerf estimate 'fix bug' --model opus           # specific model
+kerf estimate 'add auth' --files 'src/auth/*'   # with file context
+kerf estimate 'fix bug' --json                  # JSON output
 ```
 
-### Per-Project Budgets — `kerf-cli budget`
+### Per-Project Budgets — `kerf budget`
 
 Set spending limits with automatic warnings.
 
 ```bash
-npx kerf-cli budget set 50 --period weekly     # set budget
-npx kerf-cli budget show                        # check status
-npx kerf-cli budget list                        # all projects
-npx kerf-cli budget remove                      # remove budget
+kerf budget set 50 --period weekly     # set budget
+kerf budget show                        # check status
+kerf budget list                        # all projects
+kerf budget remove                      # remove budget
 ```
 
 ```
@@ -190,12 +197,12 @@ npx kerf-cli budget remove                      # remove budget
 
 With hooks installed, you get warnings at 80% and alerts at 100%.
 
-### Ghost Token Audit — `kerf-cli audit`
+### Ghost Token Audit — `kerf audit`
 
 Find invisible token waste eating your context window.
 
 ```bash
-$ npx kerf-cli audit
+$ kerf audit
 
   Context Window Health: B (62% usable)
 
@@ -215,20 +222,20 @@ $ npx kerf-cli audit
 
 **Ghost tokens** are context consumed before your conversation starts: system prompt, built-in tools, MCP tools (~600 tokens each), CLAUDE.md, and autocompact buffer.
 
-**CLAUDE.md attention curve:** Claude's attention is U-shaped. Rules at 0-30% and 70-100% get high attention. The 30-70% middle is a "dead zone." kerf-cli flags critical rules (NEVER, ALWAYS, MUST) stuck there.
+**CLAUDE.md attention curve:** Claude's attention is U-shaped. Rules at 0-30% and 70-100% get high attention. The 30-70% middle is a "dead zone." kerf flags critical rules (NEVER, ALWAYS, MUST) stuck there.
 
 ```bash
-npx kerf-cli audit --claude-md-only    # per-section breakdown with attention zones
-npx kerf-cli audit --mcp-only          # MCP server analysis
-npx kerf-cli audit --json              # machine-readable output
+kerf audit --claude-md-only    # per-section breakdown with attention zones
+kerf audit --mcp-only          # MCP server analysis
+kerf audit --json              # machine-readable output
 ```
 
-### Historical Reports — `kerf-cli report`
+### Historical Reports — `kerf report`
 
 Track spending over time with hourly charts and model breakdowns.
 
 ```bash
-$ npx kerf-cli report
+$ kerf report
 
   kerf-cli report -- Sat, Apr 4, 2026
 
@@ -245,11 +252,11 @@ $ npx kerf-cli report
 ```
 
 ```bash
-npx kerf-cli report --period week       # weekly
-npx kerf-cli report --period month      # monthly
-npx kerf-cli report --sessions --model  # per-session + per-model breakdown
-npx kerf-cli report --csv > costs.csv   # export CSV
-npx kerf-cli report --json              # export JSON
+kerf report --period week       # weekly
+kerf report --period month      # monthly
+kerf report --sessions --model  # per-session + per-model breakdown
+kerf report --csv > costs.csv   # export CSV
+kerf report --json              # export JSON
 ```
 
 ### Hooks — Automatic Tracking
@@ -260,9 +267,9 @@ Claude Code hooks run automatically during sessions:
 - **Stop hook:** Checks budget and warns at 80%, alerts at 100%
 
 ```bash
-npx kerf-cli init              # install hooks for current project
-npx kerf-cli init --global     # install globally
-npx kerf-cli init --no-hooks   # database only, skip hooks
+kerf init              # install hooks for current project
+kerf init --global     # install globally
+kerf init --no-hooks   # database only, skip hooks
 ```
 
 ---
@@ -271,27 +278,29 @@ npx kerf-cli init --no-hooks   # database only, skip hooks
 
 | Command | Description |
 |---------|-------------|
-| `npx kerf-cli watch` | Real-time cost dashboard (default) |
-| `npx kerf-cli estimate <task>` | Pre-flight cost estimation |
-| `npx kerf-cli estimate --compare <task>` | Compare Sonnet vs Opus vs Haiku |
-| `npx kerf-cli budget set <amt> --period weekly` | Set project budget |
-| `npx kerf-cli budget show` | Check budget status |
-| `npx kerf-cli budget list` | List all project budgets |
-| `npx kerf-cli budget remove` | Remove budget |
-| `npx kerf-cli audit` | Ghost token & CLAUDE.md audit |
-| `npx kerf-cli audit --claude-md-only` | CLAUDE.md section analysis |
-| `npx kerf-cli audit --mcp-only` | MCP server analysis |
-| `npx kerf-cli report` | Today's cost report |
-| `npx kerf-cli report --period week` | Weekly report |
-| `npx kerf-cli report --csv` | Export as CSV |
-| `npx kerf-cli init` | First-time setup |
+| `kerf watch` | Real-time cost dashboard (default) |
+| `kerf estimate <task>` | Pre-flight cost estimation |
+| `kerf estimate --compare <task>` | Compare Sonnet vs Opus vs Haiku |
+| `kerf budget set <amt> --period weekly` | Set project budget |
+| `kerf budget show` | Check budget status |
+| `kerf budget list` | List all project budgets |
+| `kerf budget remove` | Remove budget |
+| `kerf audit` | Ghost token & CLAUDE.md audit |
+| `kerf audit --claude-md-only` | CLAUDE.md section analysis |
+| `kerf audit --mcp-only` | MCP server analysis |
+| `kerf report` | Today's cost report |
+| `kerf report --period week` | Weekly report |
+| `kerf report --csv` | Export as CSV |
+| `kerf init` | First-time setup |
+
+> All commands work with both `kerf` and `kerf-cli`.
 
 ---
 
-## Why kerf-cli?
+## Why kerf?
 
-| Feature | kerf-cli | RTK | ccusage | token-optimizer |
-|---------|----------|-----|---------|-----------------|
+| Feature | kerf | RTK | ccusage | token-optimizer |
+|---------|------|-----|---------|-----------------|
 | Real-time dashboard | Yes | No | No | No |
 | Pre-flight estimation | Yes | No | No | No |
 | Per-project budgets | Yes | No | No | No |
@@ -308,8 +317,8 @@ Works alongside RTK, ccusage, and ECC.
 
 ## Tips
 
-- **Use Sonnet for implementation, Opus for planning** — check with `estimate --compare`
-- **Keep CLAUDE.md under 200 lines** — audit with `audit --claude-md-only`
+- **Use Sonnet for implementation, Opus for planning** — check with `kerf estimate --compare`
+- **Keep CLAUDE.md under 200 lines** — audit with `kerf audit --claude-md-only`
 - **Disable unused MCP servers** — each tool costs ~600 tokens
 - **Monitor cache hit rate** — high rates (>80%) mean efficient context reuse
 - **Set weekly budgets** — enough flexibility without runaway costs
@@ -322,39 +331,20 @@ Works alongside RTK, ccusage, and ECC.
 |---------|----------|
 | "No active session found" | Ensure Claude Code is running and has sent a message |
 | Dashboard shows no data | Send a message in Claude Code, wait for response |
-| Costs seem wrong | kerf-cli uses `total_cost_usd` from logs when available; estimates use heuristic |
+| Costs seem wrong | kerf uses `total_cost_usd` from logs when available; estimates use heuristic |
 | Command not found | Use `npx kerf-cli@latest` or `npm install -g kerf-cli` |
-| Database errors | `rm ~/.kerf/kerf.db && npx kerf-cli init` |
+| Database errors | `rm ~/.kerf/kerf.db && kerf init` |
 | Watch crashes | Must run in an interactive terminal, not piped |
-
----
-
-## Changelog
-
-### v0.1.4 (2026-04-04)
-- Fix: `--version` now reads dynamically from package.json
-- Fix: `--compare` shows proper side-by-side table for all 3 models
-- Fix: `watch` gracefully exits in non-TTY environments
-- Fix: CLAUDE.md detection searches git root and `~/.claude/`
-- Fix: `--claude-md-only` shows per-section breakdown with attention zones
-- Fix: Hourly report dates no longer show "Invalid Date"
-
-### v0.1.3 (2026-04-04)
-- Fix: CLAUDE.md found via git root, not just cwd
-- Fix: Audit filtering for `--claude-md-only` and `--mcp-only`
-- Fix: Hourly report date parsing
-
-### v0.1.1 (2026-04-04)
-- Fix: ContextBar crash when token usage exceeds 100%
-
-### v0.1.0 (2026-04-04)
-- Initial release: watch, estimate, budget, audit, report, init
 
 ---
 
 ## Architecture
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for project structure, design decisions, data flow, and technology choices.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ---
 
