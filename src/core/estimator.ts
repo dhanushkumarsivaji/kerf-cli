@@ -136,7 +136,7 @@ export async function estimateTaskCost(
   }
 
   if (overhead.percentUsable < 60) {
-    recommendations.push(`High ghost token overhead (${(100 - overhead.percentUsable).toFixed(0)}%). Run 'kerf audit' to optimize.`);
+    recommendations.push(`High ghost token overhead (${(100 - overhead.percentUsable).toFixed(0)}%). Run 'kerf-cli audit' to optimize.`);
   }
 
   if (fileTokens > 50000) {

@@ -9,13 +9,13 @@ import { runMigrations } from "../../db/migrations.js";
 export function registerInitCommand(program: Command): void {
   program
     .command("init")
-    .description("Set up kerf for the current project")
+    .description("Set up kerf-cli for the current project")
     .option("--global", "Install hooks globally")
     .option("--hooks-only", "Only install hooks")
     .option("--no-hooks", "Skip hook installation")
     .option("--force", "Skip confirmation prompts")
     .action(async (opts) => {
-      console.log(chalk.bold.cyan("\n  Welcome to kerf!\n"));
+      console.log(chalk.bold.cyan("\n  Welcome to kerf-cli!\n"));
       console.log("  Setting up cost intelligence for Claude Code...\n");
 
       // Create ~/.kerf/ directory
@@ -79,7 +79,7 @@ export function registerInitCommand(program: Command): void {
         },
       }, null, 4).split("\n").map(l => "    " + l).join("\n")));
 
-      console.log(chalk.bold.cyan("\n  Run 'kerf watch' to start the live dashboard!\n"));
+      console.log(chalk.bold.cyan("\n  Run 'kerf-cli watch' to start the live dashboard!\n"));
     });
 }
 

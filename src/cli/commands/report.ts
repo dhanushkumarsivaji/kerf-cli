@@ -126,7 +126,7 @@ export function registerReportCommand(program: Command): void {
 
       // Pretty print
       const periodLabel = opts.period === "today" ? now.format("ddd, MMM D, YYYY") : opts.period;
-      console.log(chalk.bold.cyan(`\n  kerf report -- ${periodLabel}\n`));
+      console.log(chalk.bold.cyan(`\n  kerf-cli report -- ${periodLabel}\n`));
       console.log(`  Total Cost:       ${chalk.bold(formatCost(totalCost))}`);
       console.log(`  Total Tokens:     ${formatTokens(totalInput)} in / ${formatTokens(totalOutput)} out`);
       console.log(`  Cache Hit Rate:   ${cacheHitRate.toFixed(1)}%`);

@@ -39,7 +39,7 @@ export function registerBudgetCommand(program: Command): void {
       const status = manager.checkBudget(projectPath);
 
       if (!status) {
-        console.log("No budget set for this project. Use 'kerf budget set <amount>' to set one.");
+        console.log("No budget set for this project. Use 'kerf-cli budget set <amount>' to set one.");
         manager.close();
         return;
       }
@@ -57,7 +57,7 @@ export function registerBudgetCommand(program: Command): void {
       const color = pct < 50 ? "green" : pct < 80 ? "yellow" : "red";
       const barColor = color === "green" ? chalk.green : color === "yellow" ? chalk.yellow : chalk.red;
 
-      console.log(chalk.bold.cyan("\n  kerf budget\n"));
+      console.log(chalk.bold.cyan("\n  kerf-cli budget\n"));
       console.log(`  Period:  ${status.period} (${status.periodStart.slice(0, 10)} to ${status.periodEnd.slice(0, 10)})`);
       console.log(`  Budget:  ${formatCost(status.budget)}`);
       console.log(`  Spent:   ${barColor(formatCost(status.spent))}`);
@@ -79,12 +79,12 @@ export function registerBudgetCommand(program: Command): void {
       const projects = manager.listProjects();
 
       if (projects.length === 0) {
-        console.log("No projects with budgets. Use 'kerf budget set <amount>' to set one.");
+        console.log("No projects with budgets. Use 'kerf-cli budget set <amount>' to set one.");
         manager.close();
         return;
       }
 
-      console.log(chalk.bold.cyan("\n  kerf budget list\n"));
+      console.log(chalk.bold.cyan("\n  kerf-cli budget list\n"));
       for (const p of projects) {
         const budgetStr = p.budget ? `${formatCost(p.budget)}/${p.period}` : "no budget";
         const spentStr = p.spent > 0 ? ` (spent: ${formatCost(p.spent)})` : "";

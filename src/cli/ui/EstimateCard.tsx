@@ -13,7 +13,7 @@ export function EstimateCard({ task, estimate }: EstimateCardProps) {
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={2} paddingY={1}>
       <Text bold color="cyan">
-        kerf estimate: '{task}'
+        kerf-cli estimate: '{task}'
       </Text>
       <Text> </Text>
       <Text>

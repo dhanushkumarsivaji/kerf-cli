@@ -28,7 +28,7 @@ export function registerWatchCommand(program: Command): void {
 
       if (!sessionFilePath) {
         console.log(
-          "No active Claude Code session found. Start Claude Code and run 'kerf watch' again.",
+          "No active Claude Code session found. Start Claude Code and run 'kerf-cli watch' again.",
         );
         process.exit(0);
       }

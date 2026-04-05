@@ -72,7 +72,7 @@ export function Dashboard({ sessionFilePath, interval }: DashboardProps) {
     <Box flexDirection="column">
       <Box borderStyle="round" borderColor="cyan" paddingX={1}>
         <Text bold color="cyan">
-          kerf watch
+          kerf-cli watch
         </Text>
         <Text> | session: {session.sessionId.slice(0, 8)}...</Text>
         <Text> | {session.messageCount} messages</Text>

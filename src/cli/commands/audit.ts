@@ -24,7 +24,7 @@ export function registerAuditCommand(program: Command): void {
         result.grade === "B" ? chalk.yellow :
         chalk.red;
 
-      console.log(chalk.bold.cyan("\n  kerf audit report\n"));
+      console.log(chalk.bold.cyan("\n  kerf-cli audit report\n"));
       console.log(
         `  Context Window Health: ${gradeColor.bold(result.grade)} (${result.contextOverhead.percentUsable.toFixed(0)}% usable)\n`,
       );

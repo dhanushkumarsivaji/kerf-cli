@@ -9,7 +9,7 @@ import { registerInitCommand } from "./commands/init.js";
 const program = new Command();
 
 program
-  .name("kerf")
+  .name("kerf-cli")
   .version("0.1.0")
   .description("Cost intelligence for Claude Code. Know before you spend.");
 

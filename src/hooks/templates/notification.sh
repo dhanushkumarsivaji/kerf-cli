@@ -1,5 +1,5 @@
 #!/bin/bash
-# kerf notification hook — logs token usage to ~/.kerf/session-log.jsonl
+# kerf-cli notification hook — logs token usage to ~/.kerf/session-log.jsonl
 # Receives JSON on stdin with session_id and transcript_path
 
 KERF_LOG="${HOME}/.kerf/session-log.jsonl"
