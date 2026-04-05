@@ -18,6 +18,14 @@ export interface ContextOverhead {
   percentUsable: number;
 }
 
+export interface ComplexitySignals {
+  keywordScore: number;
+  fileSizeScore: number;
+  fileCountScore: number;
+  descriptionLengthScore: number;
+  totalScore: number;
+}
+
 export interface CostEstimate {
   model: string;
   estimatedTurns: { low: number; expected: number; high: number };
@@ -25,14 +33,20 @@ export interface CostEstimate {
   estimatedCost: { low: string; expected: string; high: string };
   contextOverhead: number;
   fileTokens: number;
+  fileCount: number;
   percentOfWindow: number;
   recommendations: string[];
+  complexitySignals: ComplexitySignals;
+  detectedComplexity: string;
+  estimatedToolOverhead: number;
+  tokenCountingMethod?: "heuristic" | "precise";
 }
 
 export interface EstimateOptions {
   model: "sonnet" | "opus" | "haiku";
   files: string[];
   cwd: string;
+  precise?: boolean;
 }
 
 export interface BudgetStatus {

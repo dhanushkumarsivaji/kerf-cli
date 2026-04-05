@@ -5,6 +5,8 @@ import { registerBudgetCommand } from "./commands/budget.js";
 import { registerAuditCommand } from "./commands/audit.js";
 import { registerReportCommand } from "./commands/report.js";
 import { registerInitCommand } from "./commands/init.js";
+import { registerImportCommand } from "./commands/import.js";
+import { registerDashboardCommand } from "./commands/dashboard.js";
 
 declare const __KERF_VERSION__: string;
 
@@ -22,6 +24,8 @@ registerBudgetCommand(program);
 registerAuditCommand(program);
 registerReportCommand(program);
 registerInitCommand(program);
+registerImportCommand(program);
+registerDashboardCommand(program);
 
 // Default to watch if no command given
 program.action(async () => {

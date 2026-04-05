@@ -1,23 +1,49 @@
 import { describe, it, expect } from "vitest";
-import { estimateTaskCost } from "../src/core/estimator.js";
+import { estimateTaskCost, scoreComplexity } from "../src/core/estimator.js";
+
+describe("scoreComplexity", () => {
+  it("gives low score for simple keywords with no files", () => {
+    const signals = scoreComplexity("fix typo", 0, 0);
+    expect(signals.totalScore).toBeLessThan(0.2);
+    expect(signals.keywordScore).toBe(0.2);
+  });
+
+  it("gives high score for complex keywords", () => {
+    const signals = scoreComplexity("refactor the entire auth system", 0, 0);
+    expect(signals.keywordScore).toBe(0.9);
+    expect(signals.totalScore).toBeGreaterThan(0.3);
+  });
+
+  it("file size increases score significantly", () => {
+    const noFiles = scoreComplexity("update code", 0, 0);
+    const largeFiles = scoreComplexity("update code", 50000, 10);
+    expect(largeFiles.totalScore).toBeGreaterThan(noFiles.totalScore + 0.2);
+  });
+
+  it("same keywords with different file sizes produce different scores", () => {
+    const small = scoreComplexity("fix typo", 500, 1);
+    const large = scoreComplexity("fix typo", 40000, 20);
+    expect(large.totalScore).toBeGreaterThan(small.totalScore);
+  });
+
+  it("long descriptions score higher", () => {
+    const short = scoreComplexity("fix bug", 0, 0);
+    const long = scoreComplexity("fix the authentication bug in the login flow that causes session timeouts for users on mobile devices", 0, 0);
+    expect(long.descriptionLengthScore).toBeGreaterThan(short.descriptionLengthScore);
+  });
+});
 
 describe("estimateTaskCost", () => {
-  it("estimates a simple task with low cost", async () => {
-    const result = await estimateTaskCost("fix typo in README", { model: "sonnet" });
-    expect(result.model).toBe("sonnet");
-    expect(result.estimatedTurns.low).toBeLessThanOrEqual(5);
-    expect(result.estimatedTurns.expected).toBeLessThanOrEqual(5);
+  it("estimates a simple task with fewer turns than complex", async () => {
+    const simple = await estimateTaskCost("fix typo", { model: "sonnet" });
+    const complex = await estimateTaskCost("refactor the entire authentication system from scratch", { model: "sonnet" });
+    expect(simple.estimatedTurns.expected).toBeLessThan(complex.estimatedTurns.expected);
   });
 
-  it("estimates a complex task with higher turns", async () => {
-    const result = await estimateTaskCost("refactor the entire auth module", { model: "sonnet" });
+  it("detects complex keywords correctly", async () => {
+    const result = await estimateTaskCost("build a complete dashboard web app from scratch", { model: "sonnet", files: [], cwd: "/tmp" });
+    expect(result.detectedComplexity).toMatch(/complex|massive/);
     expect(result.estimatedTurns.expected).toBeGreaterThanOrEqual(15);
-  });
-
-  it("estimates a medium task", async () => {
-    const result = await estimateTaskCost("fix the login form validation", { model: "sonnet" });
-    expect(result.estimatedTurns.expected).toBeGreaterThanOrEqual(5);
-    expect(result.estimatedTurns.expected).toBeLessThanOrEqual(15);
   });
 
   it("returns cost as formatted strings", async () => {
@@ -27,14 +53,31 @@ describe("estimateTaskCost", () => {
     expect(result.estimatedCost.high).toMatch(/^\$/);
   });
 
-  it("includes recommendations for sonnet model", async () => {
-    const result = await estimateTaskCost("fix a bug", { model: "sonnet" });
-    expect(result.recommendations.length).toBeGreaterThan(0);
-    expect(result.recommendations.some((r) => r.includes("Opus"))).toBe(true);
+  it("includes complexity signals", async () => {
+    const result = await estimateTaskCost("build a dashboard", { model: "sonnet" });
+    expect(result.complexitySignals).toBeDefined();
+    expect(result.complexitySignals.totalScore).toBeGreaterThan(0);
+    expect(result.detectedComplexity).toBeTruthy();
+  });
+
+  it("includes tool overhead", async () => {
+    const result = await estimateTaskCost("add feature", { model: "sonnet" });
+    expect(result.estimatedToolOverhead).toBeGreaterThan(0);
   });
 
   it("includes context overhead", async () => {
     const result = await estimateTaskCost("add feature", { model: "sonnet" });
     expect(result.contextOverhead).toBeGreaterThan(0);
+  });
+
+  it("percentOfWindow is reasonable", async () => {
+    const result = await estimateTaskCost("build a complete web application from scratch", { model: "sonnet" });
+    expect(result.percentOfWindow).toBeGreaterThan(0);
+    expect(result.percentOfWindow).toBeLessThanOrEqual(100);
+  });
+
+  it("includes recommendations for sonnet", async () => {
+    const result = await estimateTaskCost("fix a bug", { model: "sonnet" });
+    expect(result.recommendations.some((r) => r.includes("Opus"))).toBe(true);
   });
 });

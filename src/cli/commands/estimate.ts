@@ -12,6 +12,7 @@ export function registerEstimateCommand(program: Command): void {
     .description("Pre-flight cost estimation")
     .option("-m, --model <model>", "Model to estimate for", "sonnet")
     .option("-f, --files <glob>", "Specific files that will be touched")
+    .option("--precise", "Use Anthropic API for accurate token counts")
     .option("--compare", "Show Sonnet vs Opus vs Haiku comparison")
     .option("--json", "Output as JSON")
     .action(async (task: string, opts) => {
@@ -26,7 +27,7 @@ export function registerEstimateCommand(program: Command): void {
 
         if (opts.json) {
           for (const model of models) {
-            const estimate = await estimateTaskCost(task, { model, files, cwd: process.cwd() });
+            const estimate = await estimateTaskCost(task, { model, files, cwd: process.cwd(), precise: opts.precise });
             console.log(JSON.stringify(estimate, null, 2));
           }
           return;
@@ -40,7 +41,9 @@ export function registerEstimateCommand(program: Command): void {
           })),
         );
 
-        console.log(chalk.bold.cyan(`\n  kerf-cli estimate: '${task}'\n`));
+        const firstEstimate = estimates[0].estimate;
+        console.log(chalk.bold.cyan(`\n  kerf-cli estimate: '${task}'`));
+        console.log(chalk.dim(`  Complexity: ${firstEstimate.detectedComplexity} (score: ${firstEstimate.complexitySignals.totalScore.toFixed(2)})\n`));
         console.log(
           `  ${"Model".padEnd(10)} ${"Turns".padEnd(14)} ${"Low".padEnd(12)} ${"Expected".padEnd(12)} ${"High".padEnd(12)}`,
         );
@@ -69,6 +72,7 @@ export function registerEstimateCommand(program: Command): void {
         model: opts.model,
         files,
         cwd: process.cwd(),
+        precise: opts.precise,
       });
 
       if (opts.json) {

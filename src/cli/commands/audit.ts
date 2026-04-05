@@ -1,6 +1,8 @@
 import { Command } from "commander";
 import chalk from "chalk";
+import { copyFileSync, writeFileSync } from "node:fs";
 import { runFullAudit } from "../../audit/recommendations.js";
+import { findClaudeMdPath, reorderClaudeMd } from "../../audit/claudeMdLinter.js";
 import { CONTEXT_WINDOW_SIZE } from "../../core/config.js";
 
 export function registerAuditCommand(program: Command): void {
@@ -125,7 +127,27 @@ export function registerAuditCommand(program: Command): void {
       console.log();
 
       if (opts.fix) {
-        console.log(chalk.yellow("  --fix: Auto-fix is not yet implemented. Coming in v0.2.0.\n"));
+        const fixes: string[] = [];
+
+        if (result.claudeMdAnalysis && result.claudeMdAnalysis.criticalRulesInDeadZone > 0) {
+          const claudeMdPath = findClaudeMdPath();
+          if (claudeMdPath) {
+            const { reordered, changes } = reorderClaudeMd(claudeMdPath);
+            const backupPath = claudeMdPath + ".kerf-backup";
+            copyFileSync(claudeMdPath, backupPath);
+            writeFileSync(claudeMdPath, reordered);
+            fixes.push(...changes);
+            console.log(chalk.green("  Backup saved to " + backupPath));
+          }
+        }
+
+        if (fixes.length > 0) {
+          console.log(chalk.green.bold("\n  Applied fixes:"));
+          fixes.forEach(f => console.log(chalk.green("    - " + f)));
+        } else {
+          console.log(chalk.dim("\n  No auto-fixable issues found."));
+        }
+        console.log();
       }
     });
 }

@@ -50,6 +50,56 @@ export function countFileTokens(filePath: string): number {
   }
 }
 
+const tokenCache = new Map<string, number>();
+
+/**
+ * Count tokens using the Anthropic count_tokens API for accurate results.
+ * Falls back to heuristic if ANTHROPIC_API_KEY is not set or API call fails.
+ */
+export async function countTokensAccurate(text: string): Promise<number> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return estimateTokens(text);
+
+  // Cache by content hash
+  const hash = Buffer.from(text.slice(0, 200) + text.length).toString("base64");
+  if (tokenCache.has(hash)) return tokenCache.get(hash)!;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages/count_tokens", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        messages: [{ role: "user", content: text }],
+      }),
+    });
+
+    if (!response.ok) return estimateTokens(text);
+    const data = await response.json() as { input_tokens: number };
+    tokenCache.set(hash, data.input_tokens);
+    return data.input_tokens;
+  } catch {
+    return estimateTokens(text);
+  }
+}
+
+/**
+ * Count tokens in a file using the Anthropic count_tokens API.
+ * Falls back to 0 if the file cannot be read.
+ */
+export async function countFileTokensAccurate(filePath: string): Promise<number> {
+  try {
+    const content = readFileSync(filePath, "utf-8");
+    return countTokensAccurate(content);
+  } catch {
+    return 0;
+  }
+}
+
 export interface ClaudeMdSection {
   title: string;
   content: string;

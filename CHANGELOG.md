@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-04-05
+
+### Added
+- Smart estimator with multi-signal complexity scoring (keywords + file size + file count + description length)
+- Tool call overhead modeling in cost estimates (1-5 tool calls/turn based on complexity)
+- Optional Anthropic count_tokens API integration (`--precise` flag)
+- `kerf audit --fix` auto-reorders CLAUDE.md sections for optimal attention curve
+- `kerf import` command for syncing all historical session data into budget database
+- `kerf dashboard` — React web dashboard with charts (Recharts) on localhost:3847
+  - Cost over time area chart
+  - Session breakdown table
+  - Ghost token visualization
+  - Period selector (today/week/month)
+  - Auto-refresh every 10 seconds
+  - CSV export
+- Complexity signals breakdown in estimate output
+- `findClaudeMdPath` utility for consistent CLAUDE.md resolution
+- Launch content for HN, Reddit, DEV, Twitter
+
+### Changed
+- Estimator uses continuous scoring (0-1) instead of 3 fixed tiers
+- Keywords weight adjusts when no files specified (60% keywords vs 35% with files)
+- Output tokens per turn scales with file size
+
+### Fixed
+- All P0/P1/P2 fixes from v0.2.x applied
+
+## [0.2.2] - 2026-04-04
+
+### Fixed
+- Smarter task complexity detection with expanded keywords and word-count heuristic
+
+## [0.2.1] - 2026-04-04
+
+### Fixed
+- 10 bugs from code review: init hooks, percentOfWindow, budget sync, estimator pricing, dead code, session grouping, streaming parser, linter git root, DRY MCP
+- Added 32 new tests (66 total)
+
 ## [0.2.0] - 2026-04-04
 
 ### Added

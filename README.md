@@ -259,6 +259,28 @@ kerf report --csv > costs.csv   # export CSV
 kerf report --json              # export JSON
 ```
 
+### Data Import — `kerf import`
+
+Sync all historical session data into the budget tracking database.
+
+```bash
+kerf import                        # import all sessions
+kerf import --since 2026-03-01     # only recent data
+kerf import --dry-run              # preview without writing
+```
+
+### Web Dashboard — `kerf dashboard`
+
+Open a React dashboard in your browser with charts and analytics.
+
+```bash
+kerf dashboard              # opens http://localhost:3847
+kerf dashboard --port 8080  # custom port
+kerf dashboard --no-open    # start server without opening browser
+```
+
+Features: cost over time chart, session table, ghost token breakdown, period selector, auto-refresh, CSV export.
+
 ### Hooks — Automatic Tracking
 
 Claude Code hooks run automatically during sessions:
@@ -288,9 +310,14 @@ kerf init --no-hooks   # database only, skip hooks
 | `kerf audit` | Ghost token & CLAUDE.md audit |
 | `kerf audit --claude-md-only` | CLAUDE.md section analysis |
 | `kerf audit --mcp-only` | MCP server analysis |
+| `kerf audit --fix` | Auto-reorder CLAUDE.md sections |
 | `kerf report` | Today's cost report |
 | `kerf report --period week` | Weekly report |
 | `kerf report --csv` | Export as CSV |
+| `kerf import` | Sync historical data to budget DB |
+| `kerf import --dry-run` | Preview import |
+| `kerf dashboard` | Web dashboard (localhost:3847) |
+| `kerf estimate --precise <task>` | Accurate token counts via API |
 | `kerf init` | First-time setup |
 
 > All commands work with both `kerf` and `kerf-cli`.

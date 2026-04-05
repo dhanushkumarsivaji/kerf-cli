@@ -1,21 +1,8 @@
 import { glob } from "glob";
-import { countFileTokens, estimateContextOverhead } from "./tokenCounter.js";
+import { countFileTokens, countFileTokensAccurate, estimateContextOverhead } from "./tokenCounter.js";
 import { resolveModelPricing, formatCost } from "./costCalculator.js";
-import type { CostEstimate, EstimateOptions } from "../types/config.js";
+import type { CostEstimate, EstimateOptions, ComplexitySignals } from "../types/config.js";
 import type { ModelPricing } from "../types/pricing.js";
-
-type TaskComplexity = "simple" | "medium" | "complex";
-
-interface ComplexityProfile {
-  turns: { low: number; expected: number; high: number };
-  outputTokensPerTurn: number;
-}
-
-const COMPLEXITY_PROFILES: Record<TaskComplexity, ComplexityProfile> = {
-  simple: { turns: { low: 2, expected: 3, high: 5 }, outputTokensPerTurn: 1000 },
-  medium: { turns: { low: 5, expected: 10, high: 15 }, outputTokensPerTurn: 2000 },
-  complex: { turns: { low: 15, expected: 25, high: 40 }, outputTokensPerTurn: 2500 },
-};
 
 const SIMPLE_KEYWORDS = [
   "typo", "rename", "fix typo", "update version", "change name",
@@ -31,39 +18,92 @@ const COMPLEX_KEYWORDS = [
   "test suite", "ci/cd", "deployment", "integration",
 ];
 
-// Typical 5-hour window costs per model (for percentOfWindow calculation)
 const TYPICAL_WINDOW_COSTS: Record<string, number> = {
   sonnet: 15,
   opus: 75,
   haiku: 4,
 };
 
-function detectComplexity(taskDescription: string): TaskComplexity {
-  const lower = taskDescription.toLowerCase();
-  if (SIMPLE_KEYWORDS.some((k) => lower.includes(k))) return "simple";
-  if (COMPLEX_KEYWORDS.some((k) => lower.includes(k))) return "complex";
+const TOOL_CALLS_PER_COMPLEXITY: Record<string, number> = {
+  trivial: 1,
+  simple: 2,
+  moderate: 3,
+  complex: 4,
+  massive: 5,
+};
 
-  // Heuristic: longer descriptions tend to be more complex tasks
-  const wordCount = lower.split(/\s+/).filter(Boolean).length;
-  if (wordCount >= 8) return "complex";
-  if (wordCount <= 3) return "simple";
-
-  return "medium";
-}
-
+const TOKENS_PER_TOOL_CALL = 800;
 const MILLION = 1_000_000;
 const CACHE_HIT_RATE = 0.9;
+
+function detectKeywordScore(task: string): number {
+  const lower = task.toLowerCase();
+  if (SIMPLE_KEYWORDS.some((k) => lower.includes(k))) return 0.2;
+  if (COMPLEX_KEYWORDS.some((k) => lower.includes(k))) return 0.9;
+  return 0.5;
+}
+
+export function scoreComplexity(
+  task: string,
+  fileTokens: number,
+  fileCount: number,
+): ComplexitySignals {
+  const keywordScore = detectKeywordScore(task);
+
+  // File size: <1K trivial, 1-5K small, 5-20K medium, 20-100K large, >100K massive
+  const fileSizeScore = Math.min(1, fileTokens / 50000);
+
+  // File count: 1=simple, 2-5=medium, 5-15=complex, >15=massive
+  const fileCountScore = Math.min(1, fileCount / 15);
+
+  // Description length: longer = more complex
+  const wordCount = task.split(/\s+/).filter(Boolean).length;
+  const descriptionLengthScore = Math.min(1, wordCount / 15);
+
+  // Weighted average — keywords dominate when files aren't specified
+  const hasFiles = fileTokens > 0 || fileCount > 0;
+  const totalScore = hasFiles
+    ? keywordScore * 0.35 + fileSizeScore * 0.30 + fileCountScore * 0.20 + descriptionLengthScore * 0.15
+    : keywordScore * 0.60 + descriptionLengthScore * 0.40;
+
+  return { keywordScore, fileSizeScore, fileCountScore, descriptionLengthScore, totalScore };
+}
+
+function scoreToComplexityLabel(score: number): string {
+  if (score < 0.15) return "trivial";
+  if (score < 0.35) return "simple";
+  if (score < 0.55) return "moderate";
+  if (score < 0.75) return "complex";
+  return "massive";
+}
+
+function scoreTurnRange(score: number): { low: number; expected: number; high: number } {
+  const baseTurns = Math.round(2 + score * 48);
+  return {
+    low: Math.max(2, Math.round(baseTurns * 0.5)),
+    expected: baseTurns,
+    high: Math.round(baseTurns * 1.6),
+  };
+}
+
+function outputTokensPerTurn(fileTokens: number): number {
+  if (fileTokens < 5000) return 1500;
+  if (fileTokens < 20000) return 2000;
+  return 3000;
+}
 
 function estimateCostForTurns(
   turns: number,
   modelPricing: ModelPricing,
   contextPerTurn: number,
-  outputTokensPerTurn: number,
+  tokensPerTurn: number,
+  toolCallsPerTurn: number,
 ): number {
   let totalCost = 0;
   for (let turn = 1; turn <= turns; turn++) {
-    const conversationGrowth = (turn - 1) * outputTokensPerTurn;
-    const inputTokens = contextPerTurn + conversationGrowth;
+    const conversationGrowth = (turn - 1) * tokensPerTurn;
+    const toolOverhead = toolCallsPerTurn * TOKENS_PER_TOOL_CALL;
+    const inputTokens = contextPerTurn + conversationGrowth + toolOverhead;
 
     let effectiveInputCost: number;
     if (turn <= 2) {
@@ -76,7 +116,7 @@ function estimateCostForTurns(
         (uncachedTokens * modelPricing.input) / MILLION;
     }
 
-    const outputCost = (outputTokensPerTurn * modelPricing.output) / MILLION;
+    const outputCost = (tokensPerTurn * modelPricing.output) / MILLION;
     totalCost += effectiveInputCost + outputCost;
   }
   return totalCost;
@@ -90,11 +130,11 @@ export async function estimateTaskCost(
   const cwd = options.cwd ?? process.cwd();
   const pricing = resolveModelPricing(model);
 
-  // Calculate context overhead
   const overhead = estimateContextOverhead();
 
-  // Count file tokens
+  // Collect files and count tokens
   let fileTokens = 0;
+  let fileCount = 0;
   let fileList = options.files ?? [];
 
   if (fileList.length === 0) {
@@ -109,32 +149,40 @@ export async function estimateTaskCost(
         .filter(Boolean)
         .map((f) => `${cwd}/${f}`);
     } catch {
-      // No git, no files
+      // No git
     }
   }
 
+  const usePrecise = options.precise === true;
   for (const filePattern of fileList) {
     const matched = await glob(filePattern, { cwd, absolute: true });
     for (const f of matched) {
-      fileTokens += countFileTokens(f);
+      const tokens = usePrecise ? await countFileTokensAccurate(f) : countFileTokens(f);
+      if (tokens > 0) {
+        fileTokens += tokens;
+        fileCount++;
+      }
     }
   }
 
-  // Detect complexity and get profile
-  const complexity = detectComplexity(taskDescription);
-  const profile = COMPLEXITY_PROFILES[complexity];
+  // Score complexity
+  const signals = scoreComplexity(taskDescription, fileTokens, fileCount);
+  const complexityLabel = scoreToComplexityLabel(signals.totalScore);
+  const turns = scoreTurnRange(signals.totalScore);
+  const tokensPerTurn = outputTokensPerTurn(fileTokens);
+  const toolCallsPerTurn = TOOL_CALLS_PER_COMPLEXITY[complexityLabel] ?? 3;
+
   const contextPerTurn = overhead.totalOverhead + fileTokens;
 
-  const lowCost = estimateCostForTurns(profile.turns.low, pricing, contextPerTurn, profile.outputTokensPerTurn);
-  const expectedCost = estimateCostForTurns(profile.turns.expected, pricing, contextPerTurn, profile.outputTokensPerTurn);
-  const highCost = estimateCostForTurns(profile.turns.high, pricing, contextPerTurn, profile.outputTokensPerTurn);
+  const lowCost = estimateCostForTurns(turns.low, pricing, contextPerTurn, tokensPerTurn, toolCallsPerTurn);
+  const expectedCost = estimateCostForTurns(turns.expected, pricing, contextPerTurn, tokensPerTurn, toolCallsPerTurn);
+  const highCost = estimateCostForTurns(turns.high, pricing, contextPerTurn, tokensPerTurn, toolCallsPerTurn);
 
-  // Estimate total tokens for expected case
-  const expectedInputTokens = contextPerTurn * profile.turns.expected;
-  const expectedOutputTokens = profile.outputTokensPerTurn * profile.turns.expected;
+  const expectedInputTokens = contextPerTurn * turns.expected;
+  const expectedOutputTokens = tokensPerTurn * turns.expected;
   const expectedCachedTokens = expectedInputTokens * CACHE_HIT_RATE;
+  const totalToolOverhead = toolCallsPerTurn * TOKENS_PER_TOOL_CALL * turns.expected;
 
-  // Window usage — based on typical costs per model
   const typicalWindowCost = TYPICAL_WINDOW_COSTS[model] ?? TYPICAL_WINDOW_COSTS.sonnet;
   const percentOfWindow = Math.min(100, Math.round((expectedCost / typicalWindowCost) * 100));
 
@@ -142,7 +190,7 @@ export async function estimateTaskCost(
   const recommendations: string[] = [];
   if (model !== "sonnet") {
     const sonnetPricing = resolveModelPricing("sonnet");
-    const sonnetExpected = estimateCostForTurns(profile.turns.expected, sonnetPricing, contextPerTurn, profile.outputTokensPerTurn);
+    const sonnetExpected = estimateCostForTurns(turns.expected, sonnetPricing, contextPerTurn, tokensPerTurn, toolCallsPerTurn);
     const savings = expectedCost - sonnetExpected;
     if (savings > 0.01) {
       recommendations.push(
@@ -153,12 +201,12 @@ export async function estimateTaskCost(
 
   if (model === "sonnet") {
     const opusPricing = resolveModelPricing("opus");
-    const opusExpected = estimateCostForTurns(profile.turns.expected, opusPricing, contextPerTurn, profile.outputTokensPerTurn);
+    const opusExpected = estimateCostForTurns(turns.expected, opusPricing, contextPerTurn, tokensPerTurn, toolCallsPerTurn);
     recommendations.push(`Using Opus would cost ~${formatCost(opusExpected)} (${(opusExpected / expectedCost).toFixed(1)}x more)`);
   }
 
   if (overhead.percentUsable < 60) {
-    recommendations.push(`High ghost token overhead (${(100 - overhead.percentUsable).toFixed(0)}%). Run 'kerf-cli audit' to optimize.`);
+    recommendations.push(`High ghost token overhead (${(100 - overhead.percentUsable).toFixed(0)}%). Run 'kerf audit' to optimize.`);
   }
 
   if (fileTokens > 50000) {
@@ -167,7 +215,7 @@ export async function estimateTaskCost(
 
   return {
     model,
-    estimatedTurns: profile.turns,
+    estimatedTurns: turns,
     estimatedTokens: {
       input: Math.round(expectedInputTokens),
       output: Math.round(expectedOutputTokens),
@@ -180,7 +228,12 @@ export async function estimateTaskCost(
     },
     contextOverhead: overhead.totalOverhead,
     fileTokens,
+    fileCount,
     percentOfWindow,
     recommendations,
+    complexitySignals: signals,
+    detectedComplexity: complexityLabel,
+    estimatedToolOverhead: totalToolOverhead,
+    tokenCountingMethod: usePrecise && process.env.ANTHROPIC_API_KEY ? "precise" : "heuristic",
   };
 }
