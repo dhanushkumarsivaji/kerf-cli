@@ -41,6 +41,7 @@ After global install (`npm i -g kerf-cli`), use the shorter `kerf` command:
 kerf watch
 kerf estimate 'refactor auth'
 kerf audit
+kerf dashboard
 ```
 
 > Both `kerf` and `kerf-cli` work as command names.
@@ -51,7 +52,7 @@ kerf audit
 
 > "20x Max plan exhausted in 19 minutes"
 
-Claude Code sessions burn through tokens fast — context overhead, MCP tools, bloated CLAUDE.md files — and there's no way to see it in real time. kerf fixes that with live dashboards, pre-flight estimates, budgets, and ghost token auditing.
+Claude Code sessions burn through tokens fast — context overhead, MCP tools, bloated CLAUDE.md files — and there's no way to see it in real time. **36% of your 200K context window is consumed by invisible ghost tokens before you even start typing.** kerf gives you visibility with live dashboards, smart estimates, budgets, ghost token auditing, and a web dashboard.
 
 ---
 
@@ -72,7 +73,7 @@ kerf --help
 kerf init
 ```
 
-Creates `~/.kerf/` directory, initializes the SQLite database, and optionally installs Claude Code hooks for automatic tracking.
+Creates `~/.kerf/` directory, initializes the SQLite database, and installs Claude Code hooks for automatic token tracking and budget enforcement.
 
 ---
 
@@ -100,15 +101,17 @@ Auto-detects the active session. Press `q` to quit, `b` to toggle budget view.
 ### Before starting work
 
 ```bash
-kerf estimate 'refactor the auth module'
-kerf budget show
+kerf estimate 'refactor the auth module'    # what will it cost?
+kerf estimate --compare 'build dashboard'   # sonnet vs opus vs haiku
+kerf budget show                             # how's my budget?
 ```
 
 ### End-of-day review
 
 ```bash
-kerf report
-kerf report --sessions
+kerf report                  # today's spending
+kerf report --sessions       # per-session breakdown
+kerf dashboard               # visual charts in browser
 ```
 
 ---
@@ -125,9 +128,9 @@ kerf watch --session abc123    # specific session
 kerf watch --interval 5000     # slower refresh
 ```
 
-### Pre-Flight Estimation — `kerf estimate`
+### Smart Cost Estimation — `kerf estimate`
 
-Know what a task will cost before you start.
+Know what a task will cost before you start. Uses multi-signal complexity scoring: keywords, file sizes, file count, and description length.
 
 ```bash
 $ kerf estimate 'refactor auth module'
@@ -136,48 +139,62 @@ $ kerf estimate 'refactor auth module'
 │  kerf-cli estimate: 'refactor auth module'               │
 │                                                          │
 │  Model: sonnet                                           │
-│  Estimated turns: 15-40 (expected: 25)                   │
-│  Context overhead: 62.7K tokens (ghost tokens)           │
+│  Complexity: complex (score: 0.75)                       │
+│    keywords:0.9 files:0.6 count:0.4 desc:0.5            │
+│  Estimated turns: 16-50 (expected: 31)                   │
+│  Files: 12 file(s), 16.7K tokens                         │
+│  Context overhead: 62.8K tokens (ghost tokens)           │
+│  Tool overhead: ~99.2K tokens (4 calls/turn)             │
 │                                                          │
 │  Estimated Cost:                                         │
-│    Low:      $1.60    Expected: $2.62    High: $4.43     │
+│    Low:      $1.78                                       │
+│    Expected: $3.33                                       │
+│    High:     $5.66                                       │
 │                                                          │
-│    -> Using Opus would cost ~$13.11 (5x more)            │
+│  Token counting: heuristic (set ANTHROPIC_API_KEY        │
+│    for precise counts)                                   │
+│  Window Usage: ~22% of 5-hour window                     │
+│    -> Using Opus would cost ~$16.65 (5.0x more)          │
 ╰──────────────────────────────────────────────────────────╯
 ```
 
 Compare all models side by side:
 
 ```bash
-$ kerf estimate --compare 'add feature'
+$ kerf estimate --compare 'build authentication system'
+
+  kerf-cli estimate: 'build authentication system'
+  Complexity: complex (score: 0.75)
 
   Model      Turns          Low          Expected     High
   ----------------------------------------------------------
-  sonnet     5-15           $0.67        $1.05        $1.45
-  opus       5-15           $3.35        $5.24        $7.26
-  haiku      5-15           $0.18        $0.28        $0.39
+  sonnet     16-50          $1.78        $3.33        $5.66
+  opus       16-50          $8.90        $16.65       $28.28
+  haiku      16-50          $0.47        $0.89        $1.51
 
-  Cheapest: haiku at $0.28
-  Priciest: opus at $5.24
+  Cheapest: haiku at $0.89
+  Priciest: opus at $16.65
 ```
 
-Task complexity is auto-detected from keywords:
+The estimator analyzes multiple signals to determine complexity:
 
-| Complexity | Keywords | Estimated Turns |
-|-----------|----------|-----------------|
-| Simple | typo, rename, delete | 2-5 |
-| Medium | fix, add, update | 5-15 |
-| Complex | refactor, rewrite, build, implement, migrate | 15-40 |
+| Signal | Weight (with files) | Weight (no files) | What it measures |
+|--------|--------------------|--------------------|------------------|
+| Keywords | 35% | 60% | Task type (typo vs refactor vs build) |
+| File size | 30% | — | Total tokens in target files |
+| File count | 20% | — | Number of files to touch |
+| Description | 15% | 40% | Word count of task description |
 
 ```bash
-kerf estimate 'fix bug' --model opus           # specific model
-kerf estimate 'add auth' --files 'src/auth/*'   # with file context
-kerf estimate 'fix bug' --json                  # JSON output
+kerf estimate 'fix bug' --model opus              # specific model
+kerf estimate 'add auth' --files 'src/auth/*'      # with file context
+kerf estimate 'refactor' --precise                 # Anthropic API token counts
+kerf estimate 'fix bug' --json                     # JSON output
 ```
 
 ### Per-Project Budgets — `kerf budget`
 
-Set spending limits with automatic warnings.
+Set spending limits with automatic warnings via hooks.
 
 ```bash
 kerf budget set 50 --period weekly     # set budget
@@ -195,11 +212,11 @@ kerf budget remove                      # remove budget
   [████████████████░░░░] 84.6%
 ```
 
-With hooks installed, you get warnings at 80% and alerts at 100%.
+Budget data is synced automatically from JSONL session logs. With hooks installed, you get warnings at 80% and alerts at 100%.
 
 ### Ghost Token Audit — `kerf audit`
 
-Find invisible token waste eating your context window.
+Find invisible token waste eating your context window. Auto-fix CLAUDE.md with `--fix`.
 
 ```bash
 $ kerf audit
@@ -222,11 +239,12 @@ $ kerf audit
 
 **Ghost tokens** are context consumed before your conversation starts: system prompt, built-in tools, MCP tools (~600 tokens each), CLAUDE.md, and autocompact buffer.
 
-**CLAUDE.md attention curve:** Claude's attention is U-shaped. Rules at 0-30% and 70-100% get high attention. The 30-70% middle is a "dead zone." kerf flags critical rules (NEVER, ALWAYS, MUST) stuck there.
+**CLAUDE.md attention curve:** Claude's attention follows a U-shape. Rules at 0-30% and 70-100% get high attention. The 30-70% middle is a "dead zone." kerf flags critical rules (NEVER, ALWAYS, MUST) stuck there and can auto-fix the ordering.
 
 ```bash
 kerf audit --claude-md-only    # per-section breakdown with attention zones
 kerf audit --mcp-only          # MCP server analysis
+kerf audit --fix               # auto-reorder CLAUDE.md (creates backup)
 kerf audit --json              # machine-readable output
 ```
 
@@ -237,7 +255,7 @@ Track spending over time with hourly charts and model breakdowns.
 ```bash
 $ kerf report
 
-  kerf-cli report -- Sat, Apr 4, 2026
+  kerf-cli report -- Sat, Apr 5, 2026
 
   Total Cost:       $12.77
   Total Tokens:     906 in / 84.1K out
@@ -245,10 +263,10 @@ $ kerf report
   Sessions:         3
 
   Hourly:
-    Apr 4, 2 AM    █████░░░░░░░ $2.27
-    Apr 4, 1 PM    █░░░░░░░░░░░ $0.50
-    Apr 4, 2 PM    ████░░░░░░░░ $1.75
-    Apr 4, 6 PM    ████████████ $5.64
+    Apr 5, 9 AM    █████░░░░░░░ $2.27
+    Apr 5, 10 AM   █░░░░░░░░░░░ $0.50
+    Apr 5, 11 AM   ████░░░░░░░░ $1.75
+    Apr 5, 2 PM    ████████████ $5.64
 ```
 
 ```bash
@@ -264,6 +282,18 @@ kerf report --json              # export JSON
 Sync all historical session data into the budget tracking database.
 
 ```bash
+$ kerf import --dry-run
+
+  kerf-cli import
+
+  (dry run — no data written)
+
+  Sessions processed: 48
+  Messages imported:  2939
+  Total cost:         $160.96
+```
+
+```bash
 kerf import                        # import all sessions
 kerf import --since 2026-03-01     # only recent data
 kerf import --dry-run              # preview without writing
@@ -271,7 +301,7 @@ kerf import --dry-run              # preview without writing
 
 ### Web Dashboard — `kerf dashboard`
 
-Open a React dashboard in your browser with charts and analytics.
+Open a React dashboard in your browser with interactive charts and analytics.
 
 ```bash
 kerf dashboard              # opens http://localhost:3847
@@ -279,7 +309,7 @@ kerf dashboard --port 8080  # custom port
 kerf dashboard --no-open    # start server without opening browser
 ```
 
-Features: cost over time chart, session table, ghost token breakdown, period selector, auto-refresh, CSV export.
+Features: cost over time area chart, metric cards, session table, ghost token breakdown, period selector (today/week/month), auto-refresh every 10 seconds, CSV export. Dark theme with cyan accents.
 
 ### Hooks — Automatic Tracking
 
@@ -301,24 +331,24 @@ kerf init --no-hooks   # database only, skip hooks
 | Command | Description |
 |---------|-------------|
 | `kerf watch` | Real-time cost dashboard (default) |
-| `kerf estimate <task>` | Pre-flight cost estimation |
+| `kerf estimate <task>` | Smart pre-flight cost estimation |
 | `kerf estimate --compare <task>` | Compare Sonnet vs Opus vs Haiku |
+| `kerf estimate --precise <task>` | Accurate token counts via Anthropic API |
 | `kerf budget set <amt> --period weekly` | Set project budget |
 | `kerf budget show` | Check budget status |
 | `kerf budget list` | List all project budgets |
 | `kerf budget remove` | Remove budget |
 | `kerf audit` | Ghost token & CLAUDE.md audit |
-| `kerf audit --claude-md-only` | CLAUDE.md section analysis |
+| `kerf audit --claude-md-only` | CLAUDE.md section analysis with attention zones |
 | `kerf audit --mcp-only` | MCP server analysis |
-| `kerf audit --fix` | Auto-reorder CLAUDE.md sections |
+| `kerf audit --fix` | Auto-reorder CLAUDE.md for optimal attention |
 | `kerf report` | Today's cost report |
 | `kerf report --period week` | Weekly report |
 | `kerf report --csv` | Export as CSV |
 | `kerf import` | Sync historical data to budget DB |
-| `kerf import --dry-run` | Preview import |
-| `kerf dashboard` | Web dashboard (localhost:3847) |
-| `kerf estimate --precise <task>` | Accurate token counts via API |
-| `kerf init` | First-time setup |
+| `kerf import --dry-run` | Preview import without writing |
+| `kerf dashboard` | Web dashboard at localhost:3847 |
+| `kerf init` | First-time setup (database + hooks) |
 
 > All commands work with both `kerf` and `kerf-cli`.
 
@@ -329,12 +359,15 @@ kerf init --no-hooks   # database only, skip hooks
 | Feature | kerf | RTK | ccusage | token-optimizer |
 |---------|------|-----|---------|-----------------|
 | Real-time dashboard | Yes | No | No | No |
-| Pre-flight estimation | Yes | No | No | No |
+| Web dashboard | Yes | No | No | No |
+| Smart cost estimation | Yes | No | No | No |
 | Per-project budgets | Yes | No | No | No |
 | Ghost token audit | Yes | No | No | Partial |
-| CLAUDE.md optimization | Yes | No | No | Yes |
+| CLAUDE.md auto-fix | Yes | No | No | No |
 | Historical reports | Yes | No | Yes | No |
+| Data import | Yes | No | No | No |
 | Hook-based tracking | Yes | No | No | No |
+| Anthropic API counting | Yes | No | No | No |
 
 **RTK compresses. ccusage tracks. kerf predicts.**
 
@@ -346,9 +379,12 @@ Works alongside RTK, ccusage, and ECC.
 
 - **Use Sonnet for implementation, Opus for planning** — check with `kerf estimate --compare`
 - **Keep CLAUDE.md under 200 lines** — audit with `kerf audit --claude-md-only`
-- **Disable unused MCP servers** — each tool costs ~600 tokens
+- **Auto-fix CLAUDE.md ordering** — run `kerf audit --fix` to move critical rules out of the dead zone
+- **Disable unused MCP servers** — each tool costs ~600 tokens of context
 - **Monitor cache hit rate** — high rates (>80%) mean efficient context reuse
 - **Set weekly budgets** — enough flexibility without runaway costs
+- **Import historical data** — run `kerf import` to backfill your budget tracking
+- **Set ANTHROPIC_API_KEY** — enables precise token counting with `--precise`
 
 ---
 
@@ -359,9 +395,11 @@ Works alongside RTK, ccusage, and ECC.
 | "No active session found" | Ensure Claude Code is running and has sent a message |
 | Dashboard shows no data | Send a message in Claude Code, wait for response |
 | Costs seem wrong | kerf uses `total_cost_usd` from logs when available; estimates use heuristic |
+| Want precise token counts | Set `ANTHROPIC_API_KEY` env var, use `--precise` flag |
 | Command not found | Use `npx kerf-cli@latest` or `npm install -g kerf-cli` |
 | Database errors | `rm ~/.kerf/kerf.db && kerf init` |
 | Watch crashes | Must run in an interactive terminal, not piped |
+| Budget shows $0 | Run `kerf import` to sync session data into budget DB |
 
 ---
 
