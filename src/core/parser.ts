@@ -1,8 +1,7 @@
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync, readdirSync, openSync, readSync, closeSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join, basename } from "node:path";
-import { createReadStream } from "node:fs";
-import { createInterface } from "node:readline";
+
 import dayjs from "dayjs";
 import { watch } from "chokidar";
 import { CLAUDE_PROJECTS_DIR, BILLING_WINDOW_HOURS } from "./config.js";
@@ -76,6 +75,7 @@ export function parseJsonlContent(content: string, sessionId: string): ParsedMes
     // Deduplicate by message id — take the LAST occurrence (handles streaming intermediates)
     messageMap.set(id, {
       id,
+      sessionId,
       model: model !== "unknown" ? model : existing?.model ?? "unknown",
       timestamp,
       usage: parsedUsage,
@@ -144,6 +144,31 @@ export async function findJsonlFiles(baseDir?: string): Promise<string[]> {
   return files;
 }
 
+export function findJsonlFilesSync(baseDir?: string): string[] {
+  const dir = baseDir ?? CLAUDE_PROJECTS_DIR;
+  const files: string[] = [];
+
+  function walkSync(currentDir: string): void {
+    let entries;
+    try {
+      entries = readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const fullPath = join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        walkSync(fullPath);
+      } else if (entry.name.endsWith(".jsonl")) {
+        files.push(fullPath);
+      }
+    }
+  }
+
+  walkSync(dir);
+  return files;
+}
+
 export async function getActiveSessions(baseDir?: string): Promise<SessionData[]> {
   const files = await findJsonlFiles(baseDir);
   const cutoff = dayjs().subtract(BILLING_WINDOW_HOURS, "hour");
@@ -189,40 +214,66 @@ export function createStreamingParser(filePath: string): StreamingParser {
   const callbacks: Array<(msg: ParsedMessage) => void> = [];
   const sessionId = basename(filePath, ".jsonl");
   let anonymousCounter = 0;
+  let lastReadPosition = 0;
+
+  // Set initial position to end of file
+  try {
+    const stat = statSync(filePath);
+    lastReadPosition = stat.size;
+  } catch {
+    // File might not exist yet
+  }
 
   const watcher = watch(filePath, { persistent: true });
 
   watcher.on("change", () => {
-    const content = readFileSync(filePath, "utf-8");
-    const lines = content.split("\n");
-    // Process only the last few lines for incremental updates
-    const recentLines = lines.slice(-20);
-    for (const line of recentLines) {
-      const raw = parseJsonlLine(line);
-      if (!raw) continue;
-      const usage = extractUsage(raw);
-      if (!usage) continue;
-
-      const id = extractMessageId(raw) ?? `anon_${anonymousCounter++}`;
-      const model = extractModel(raw) ?? "unknown";
-      const timestamp = extractTimestamp(raw);
-
-      const msg: ParsedMessage = {
-        id,
-        model,
-        timestamp,
-        usage: {
-          input_tokens: usage.input_tokens ?? 0,
-          output_tokens: usage.output_tokens ?? 0,
-          cache_creation_input_tokens: usage.cache_creation_input_tokens ?? 0,
-          cache_read_input_tokens: usage.cache_read_input_tokens ?? 0,
-        },
-        totalCostUsd: raw.total_cost_usd ?? null,
-      };
-
-      for (const cb of callbacks) {
-        cb(msg);
+    try {
+      const stat = statSync(filePath);
+      if (stat.size <= lastReadPosition) {
+        lastReadPosition = stat.size;
+        return;
       }
+
+      // Read only new bytes since last position
+      const fd = openSync(filePath, "r");
+      const buffer = Buffer.alloc(stat.size - lastReadPosition);
+      readSync(fd, buffer, 0, buffer.length, lastReadPosition);
+      closeSync(fd);
+      lastReadPosition = stat.size;
+
+      const newContent = buffer.toString("utf-8");
+      const lines = newContent.split("\n");
+
+      for (const line of lines) {
+        const raw = parseJsonlLine(line);
+        if (!raw) continue;
+        const usage = extractUsage(raw);
+        if (!usage) continue;
+
+        const id = extractMessageId(raw) ?? `anon_${anonymousCounter++}`;
+        const model = extractModel(raw) ?? "unknown";
+        const timestamp = extractTimestamp(raw);
+
+        const msg: ParsedMessage = {
+          id,
+          sessionId,
+          model,
+          timestamp,
+          usage: {
+            input_tokens: usage.input_tokens ?? 0,
+            output_tokens: usage.output_tokens ?? 0,
+            cache_creation_input_tokens: usage.cache_creation_input_tokens ?? 0,
+            cache_read_input_tokens: usage.cache_read_input_tokens ?? 0,
+          },
+          totalCostUsd: raw.total_cost_usd ?? null,
+        };
+
+        for (const cb of callbacks) {
+          cb(msg);
+        }
+      }
+    } catch {
+      // File may be in the middle of a write
     }
   });
 

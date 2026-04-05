@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { MCP_TOKENS_PER_TOOL } from "../core/config.js";
+import { analyzeMcpServers } from "../core/tokenCounter.js";
 import type { McpServerInfo } from "../types/config.js";
 
 export interface McpAnalysis {
@@ -23,33 +23,7 @@ const CLI_ALTERNATIVES: Record<string, string> = {
 };
 
 export function analyzeMcp(): McpAnalysis {
-  const servers: McpServerInfo[] = [];
-  const configPaths = [
-    join(process.cwd(), ".mcp.json"),
-    join(homedir(), ".claude.json"),
-  ];
-
-  for (const configPath of configPaths) {
-    if (!existsSync(configPath)) continue;
-    try {
-      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
-      const mcpServers = raw.mcpServers ?? raw.mcp_servers ?? {};
-      for (const [name, config] of Object.entries(mcpServers)) {
-        const cfg = config as Record<string, unknown>;
-        const tools = Array.isArray(cfg.tools) ? cfg.tools : [];
-        const toolCount = tools.length || 5;
-        const estimatedTokens = toolCount * MCP_TOKENS_PER_TOOL;
-        servers.push({
-          name,
-          toolCount,
-          estimatedTokens,
-          isHeavy: toolCount > 10,
-        });
-      }
-    } catch {
-      continue;
-    }
-  }
+  const servers = analyzeMcpServers();
 
   const totalTools = servers.reduce((sum, s) => sum + s.toolCount, 0);
   const totalTokens = servers.reduce((sum, s) => sum + s.estimatedTokens, 0);

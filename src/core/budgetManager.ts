@@ -3,6 +3,8 @@ import isoWeek from "dayjs/plugin/isoWeek.js";
 import { basename } from "node:path";
 import { initDatabase } from "../db/schema.js";
 import { runMigrations } from "../db/migrations.js";
+import { findJsonlFilesSync, parseSessionFile } from "./parser.js";
+import { calculateMessageCost } from "./costCalculator.js";
 import type { BudgetStatus } from "../types/config.js";
 import type Database from "better-sqlite3";
 
@@ -77,6 +79,44 @@ export class BudgetManager {
       .run(projectId, sessionId, tokensIn, tokensOut, costUsd, timestamp);
   }
 
+  syncFromJsonl(projectPath: string): number {
+    const projectName = basename(projectPath);
+    const allFiles = findJsonlFilesSync();
+
+    // Filter to files matching this project
+    const encodedPath = projectPath.replace(/\//g, "-");
+    const filesToProcess = allFiles.filter(
+      (f) => f.includes(projectName) || f.includes(encodeURIComponent(projectPath)) || f.includes(encodedPath),
+    );
+    if (filesToProcess.length === 0) return 0;
+
+    let synced = 0;
+    for (const file of filesToProcess) {
+      try {
+        const session = parseSessionFile(file);
+        for (const msg of session.messages) {
+          const cost = calculateMessageCost(msg);
+          try {
+            this.recordUsage(
+              projectPath,
+              session.sessionId,
+              msg.usage.input_tokens,
+              msg.usage.output_tokens,
+              cost.totalCost,
+              msg.timestamp,
+            );
+            synced++;
+          } catch {
+            // UNIQUE constraint — already synced
+          }
+        }
+      } catch {
+        continue;
+      }
+    }
+    return synced;
+  }
+
   getUsage(projectPath: string, period: BudgetPeriod): number {
     const project = this.db
       .prepare("SELECT id FROM projects WHERE path = ?")
@@ -99,6 +139,9 @@ export class BudgetManager {
   checkBudget(projectPath: string): BudgetStatus | null {
     const budgetConfig = this.getBudget(projectPath);
     if (!budgetConfig) return null;
+
+    // Sync latest JSONL data before checking
+    this.syncFromJsonl(projectPath);
 
     const spent = this.getUsage(projectPath, budgetConfig.period);
     const remaining = Math.max(0, budgetConfig.amount - spent);

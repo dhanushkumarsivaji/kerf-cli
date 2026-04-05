@@ -1,10 +1,11 @@
 import { Command } from "commander";
 import chalk from "chalk";
-import { mkdirSync, existsSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { mkdirSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import { homedir } from "node:os";
 import { initDatabase } from "../../db/schema.js";
 import { runMigrations } from "../../db/migrations.js";
+import { installHooks } from "../../hooks/installer.js";
 
 export function registerInitCommand(program: Command): void {
   program
@@ -26,7 +27,6 @@ export function registerInitCommand(program: Command): void {
       }
 
       if (!opts.hooksOnly) {
-        // Initialize database
         try {
           const db = initDatabase();
           runMigrations(db);
@@ -44,7 +44,6 @@ export function registerInitCommand(program: Command): void {
           execSync("which rtk", { stdio: "ignore" });
           console.log(chalk.green("  Detected RTK (command compression) -- compatible!"));
         } catch { /* not installed */ }
-
         try {
           execSync("which ccusage", { stdio: "ignore" });
           console.log(chalk.green("  Detected ccusage -- will import historical data"));
@@ -53,18 +52,19 @@ export function registerInitCommand(program: Command): void {
 
       // Install hooks
       if (opts.hooks !== false) {
-        const settingsPath = opts.global
-          ? join(homedir(), ".claude", "settings.json")
-          : join(process.cwd(), ".claude", "settings.json");
-
         console.log("\n  Install hooks? These enable:");
         console.log("    - Real-time token tracking (Notification hook)");
         console.log("    - Budget enforcement (Stop hook)");
         console.log(`\n  Hooks will be added to ${opts.global ? "~/.claude" : ".claude"}/settings.json`);
 
         try {
-          installHooks(settingsPath);
-          console.log(chalk.green("\n  Hooks installed"));
+          const result = installHooks({ global: opts.global, force: opts.force });
+          for (const hook of result.installed) {
+            console.log(chalk.green(`  Installed ${hook} hook`));
+          }
+          for (const hook of result.skipped) {
+            console.log(chalk.dim(`  Skipped ${hook}`));
+          }
         } catch (err) {
           console.log(chalk.yellow(`\n  Skipped hook installation: ${err}`));
         }
@@ -81,34 +81,4 @@ export function registerInitCommand(program: Command): void {
 
       console.log(chalk.bold.cyan("\n  Run 'kerf-cli watch' to start the live dashboard!\n"));
     });
-}
-
-function installHooks(settingsPath: string): void {
-  const dir = dirname(settingsPath);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-
-  let settings: Record<string, unknown> = {};
-  if (existsSync(settingsPath)) {
-    // Backup existing settings
-    const backupPath = settingsPath + ".bak";
-    copyFileSync(settingsPath, backupPath);
-    settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
-  }
-
-  const hooks = (settings.hooks ?? {}) as Record<string, unknown[]>;
-
-  // Add Notification hook if not present
-  if (!hooks.Notification) {
-    hooks.Notification = [];
-  }
-
-  // Add Stop hook if not present
-  if (!hooks.Stop) {
-    hooks.Stop = [];
-  }
-
-  settings.hooks = hooks;
-  writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 }

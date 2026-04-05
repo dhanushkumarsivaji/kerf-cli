@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { estimateTokens, parseClaudeMdSections } from "../core/tokenCounter.js";
+import { homedir } from "node:os";
+import { parseClaudeMdSections, findGitRootClaudeMd } from "../core/tokenCounter.js";
 import type { ClaudeMdAnalysis, ClaudeMdSection } from "../types/config.js";
 
 const CRITICAL_RULE_PATTERN = /\b(NEVER|ALWAYS|MUST|IMPORTANT|CRITICAL)\b/i;
@@ -22,6 +23,8 @@ export function lintClaudeMd(filePath?: string): ClaudeMdAnalysis | null {
     : [
         join(process.cwd(), "CLAUDE.md"),
         join(process.cwd(), ".claude", "CLAUDE.md"),
+        ...findGitRootClaudeMd(),
+        join(homedir(), ".claude", "CLAUDE.md"),
       ];
 
   let resolvedPath: string | null = null;

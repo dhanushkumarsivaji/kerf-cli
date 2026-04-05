@@ -165,7 +165,7 @@ export function aggregateCosts(
     const key = getPeriodKey(msg.timestamp, period);
     const group = groups.get(key) ?? { messages: [], sessions: new Set() };
     group.messages.push(msg);
-    group.sessions.add(msg.id.split("_")[0] ?? msg.id);
+    group.sessions.add(msg.sessionId);
     groups.set(key, group);
   }
 

@@ -24,6 +24,7 @@ export interface RawJsonlMessage {
 
 export interface ParsedMessage {
   id: string;
+  sessionId: string;
   model: string;
   timestamp: string;
   usage: MessageUsage;

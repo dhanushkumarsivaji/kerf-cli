@@ -13,7 +13,7 @@ import type { ContextOverhead, McpServerInfo } from "../types/config.js";
 
 const SUPPORTED_EXTENSIONS = new Set([".md", ".ts", ".js", ".json", ".yaml", ".yml", ".py", ".txt"]);
 
-function findGitRootClaudeMd(): string[] {
+export function findGitRootClaudeMd(): string[] {
   try {
     const gitRoot = execSync("git rev-parse --show-toplevel", {
       encoding: "utf-8",

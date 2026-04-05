@@ -11,6 +11,7 @@ import type { ParsedMessage } from "../src/types/jsonl.js";
 function makeMessage(overrides: Partial<ParsedMessage> = {}): ParsedMessage {
   return {
     id: "test_msg",
+    sessionId: "test-session",
     model: "claude-sonnet-4-20250514",
     timestamp: "2026-04-04T10:00:00Z",
     usage: {

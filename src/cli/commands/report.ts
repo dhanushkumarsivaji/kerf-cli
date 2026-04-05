@@ -1,13 +1,14 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import dayjs from "dayjs";
-import { getActiveSessions, parseSessionFile, findJsonlFiles } from "../../core/parser.js";
+import { parseSessionFile, findJsonlFiles } from "../../core/parser.js";
 import {
   calculateMessageCost,
   aggregateCosts,
   formatCost,
   formatTokens,
 } from "../../core/costCalculator.js";
+import { analyzeCacheUsage } from "../../core/cacheAnalyzer.js";
 import type { ParsedMessage } from "../../types/jsonl.js";
 
 export function registerReportCommand(program: Command): void {
@@ -86,17 +87,15 @@ export function registerReportCommand(program: Command): void {
       let totalCost = 0;
       let totalInput = 0;
       let totalOutput = 0;
-      let totalCacheRead = 0;
 
       for (const msg of allMessages) {
         totalCost += calculateMessageCost(msg).totalCost;
         totalInput += msg.usage.input_tokens;
         totalOutput += msg.usage.output_tokens;
-        totalCacheRead += msg.usage.cache_read_input_tokens;
       }
 
-      const totalCacheable = totalInput + totalCacheRead;
-      const cacheHitRate = totalCacheable > 0 ? (totalCacheRead / totalCacheable) * 100 : 0;
+      const cacheAnalysis = analyzeCacheUsage(allMessages);
+      const cacheHitRate = cacheAnalysis.cacheHitRate;
 
       if (opts.json) {
         console.log(
