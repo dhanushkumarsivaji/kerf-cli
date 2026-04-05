@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import {
@@ -11,6 +12,24 @@ import {
 import type { ContextOverhead, McpServerInfo } from "../types/config.js";
 
 const SUPPORTED_EXTENSIONS = new Set([".md", ".ts", ".js", ".json", ".yaml", ".yml", ".py", ".txt"]);
+
+function findGitRootClaudeMd(): string[] {
+  try {
+    const gitRoot = execSync("git rev-parse --show-toplevel", {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "ignore"],
+    }).trim();
+    if (gitRoot && gitRoot !== process.cwd()) {
+      return [
+        join(gitRoot, "CLAUDE.md"),
+        join(gitRoot, ".claude", "CLAUDE.md"),
+      ];
+    }
+  } catch {
+    // Not in a git repo
+  }
+  return [];
+}
 
 /**
  * Fast local heuristic: tokens ~= characters / 3.5
@@ -95,6 +114,8 @@ export function analyzeClaudeMd(filePath?: string): { totalTokens: number; secti
     : [
         join(process.cwd(), "CLAUDE.md"),
         join(process.cwd(), ".claude", "CLAUDE.md"),
+        ...findGitRootClaudeMd(),
+        join(homedir(), ".claude", "CLAUDE.md"),
       ];
 
   for (const p of paths) {

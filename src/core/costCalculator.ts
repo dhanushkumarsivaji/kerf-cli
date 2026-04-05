@@ -216,8 +216,12 @@ function getPeriodKey(timestamp: string, period: AggregationPeriod): string {
 
 function formatPeriodLabel(key: string, period: AggregationPeriod): string {
   switch (period) {
-    case "hour":
-      return dayjs(key, "YYYY-MM-DD-HH").format("MMM D, h A");
+    case "hour": {
+      // key is "YYYY-MM-DD-HH", convert to parseable format
+      const parts = key.split("-");
+      const dateStr = `${parts[0]}-${parts[1]}-${parts[2]}T${parts[3]}:00:00`;
+      return dayjs(dateStr).format("MMM D, h A");
+    }
     case "day":
       return dayjs(key).format("ddd, MMM D");
     case "week":
