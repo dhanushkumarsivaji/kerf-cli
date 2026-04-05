@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { Command } from "commander";
 import { registerWatchCommand } from "./commands/watch.js";
 import { registerEstimateCommand } from "./commands/estimate.js";
@@ -6,11 +7,14 @@ import { registerAuditCommand } from "./commands/audit.js";
 import { registerReportCommand } from "./commands/report.js";
 import { registerInitCommand } from "./commands/init.js";
 
+const require = createRequire(import.meta.url);
+const pkg = require("../../package.json");
+
 const program = new Command();
 
 program
   .name("kerf-cli")
-  .version("0.1.0")
+  .version(pkg.version)
   .description("Cost intelligence for Claude Code. Know before you spend.");
 
 // Register all subcommands

@@ -33,6 +33,13 @@ export function registerWatchCommand(program: Command): void {
         process.exit(0);
       }
 
+      if (!process.stdin.isTTY) {
+        console.log(
+          "kerf-cli watch requires an interactive terminal (TTY). Run it directly in a terminal tab, not piped.",
+        );
+        process.exit(1);
+      }
+
       const { waitUntilExit } = render(
         React.createElement(Dashboard, { sessionFilePath, interval }),
       );

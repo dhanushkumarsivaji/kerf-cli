@@ -41,10 +41,13 @@ export function Dashboard({ sessionFilePath, interval }: DashboardProps) {
     return () => clearInterval(timer);
   }, [sessionFilePath, interval]);
 
-  useInput((input) => {
-    if (input === "q") exit();
-    if (input === "b") setShowBudget((prev) => !prev);
-  });
+  useInput(
+    (input) => {
+      if (input === "q") exit();
+      if (input === "b") setShowBudget((prev) => !prev);
+    },
+    { isActive: process.stdin.isTTY ?? false },
+  );
 
   if (!session || session.messages.length === 0) {
     return (
