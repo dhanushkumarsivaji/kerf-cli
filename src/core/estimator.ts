@@ -17,8 +17,19 @@ const COMPLEXITY_PROFILES: Record<TaskComplexity, ComplexityProfile> = {
   complex: { turns: { low: 15, expected: 25, high: 40 }, outputTokensPerTurn: 2500 },
 };
 
-const SIMPLE_KEYWORDS = ["typo", "rename", "fix typo", "update version", "change name", "remove unused", "delete"];
-const COMPLEX_KEYWORDS = ["refactor", "rewrite", "new module", "implement", "build", "create", "migrate", "redesign", "overhaul", "architecture"];
+const SIMPLE_KEYWORDS = [
+  "typo", "rename", "fix typo", "update version", "change name",
+  "remove unused", "delete", "bump", "update readme", "fix lint",
+  "add comment", "fix import", "remove import",
+];
+const COMPLEX_KEYWORDS = [
+  "refactor", "rewrite", "new module", "implement", "build", "create",
+  "migrate", "redesign", "overhaul", "architecture", "dashboard",
+  "full stack", "fullstack", "from scratch", "new app", "web app",
+  "entire", "complete", "system", "framework", "engine", "pipeline",
+  "authentication", "auth system", "database", "schema", "api",
+  "test suite", "ci/cd", "deployment", "integration",
+];
 
 // Typical 5-hour window costs per model (for percentOfWindow calculation)
 const TYPICAL_WINDOW_COSTS: Record<string, number> = {
@@ -31,6 +42,12 @@ function detectComplexity(taskDescription: string): TaskComplexity {
   const lower = taskDescription.toLowerCase();
   if (SIMPLE_KEYWORDS.some((k) => lower.includes(k))) return "simple";
   if (COMPLEX_KEYWORDS.some((k) => lower.includes(k))) return "complex";
+
+  // Heuristic: longer descriptions tend to be more complex tasks
+  const wordCount = lower.split(/\s+/).filter(Boolean).length;
+  if (wordCount >= 8) return "complex";
+  if (wordCount <= 3) return "simple";
+
   return "medium";
 }
 

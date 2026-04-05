@@ -15,7 +15,7 @@ describe("estimateTaskCost", () => {
   });
 
   it("estimates a medium task", async () => {
-    const result = await estimateTaskCost("add rate limiting to API", { model: "sonnet" });
+    const result = await estimateTaskCost("fix the login form validation", { model: "sonnet" });
     expect(result.estimatedTurns.expected).toBeGreaterThanOrEqual(5);
     expect(result.estimatedTurns.expected).toBeLessThanOrEqual(15);
   });
