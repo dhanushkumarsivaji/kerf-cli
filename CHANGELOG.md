@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-04-05
+
+### Added — Cache Intelligence & Anomaly Detection
+- Real-time cache health monitor — detects broken prompt cache (10-20x cost inflation) LIVE
+  - Status: HEALTHY / DEGRADED / BROKEN with hit rate percentage
+  - Estimated waste calculation ($ spent due to poor cache performance)
+  - Alert + recommendation when cache drops below thresholds
+- Per-turn cache ratio in watch dashboard (`cache:87%` next to each message)
+- Anomaly detection engine — 5 anomaly types:
+  - Cost spike (>3x session average)
+  - Cache ratio drop (sudden invalidation)
+  - Input explosion (unexpected context growth)
+  - Thinking token bloat (>30K output tokens)
+  - Session resume bloat (first turn >50K output)
+- RTK integration — detects RTK, shows install tip in `kerf init`
+- Cache health card in web dashboard API
+- Anomaly alerts in web dashboard API and report output
+- 19 new tests (92 total)
+
+### Changed
+- Watch dashboard shows cache health between ContextBar and Recent Messages
+- Recent Messages shows per-turn cache hit ratio
+- Report includes cache health summary and anomaly list
+- Web dashboard API returns cacheHealth and anomalies in JSON
+
+## [1.0.1] - 2026-04-05
+
+### Fixed
+- Remove CORS wildcard from dashboard API (prevents local data exfiltration)
+- Validate JSON in notification hook before log embedding
+- Sanitize error responses in dashboard server
+
 ## [1.0.0] - 2026-04-05
 
 ### Added

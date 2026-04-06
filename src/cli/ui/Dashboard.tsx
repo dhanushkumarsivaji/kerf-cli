@@ -10,7 +10,9 @@ import {
   formatTokens,
 } from "../../core/costCalculator.js";
 import { estimateContextOverhead } from "../../core/tokenCounter.js";
-import { CONTEXT_WINDOW_SIZE, BILLING_WINDOW_HOURS } from "../../core/config.js";
+import { analyzeCacheHealth } from "../../core/cacheHealthMonitor.js";
+import { detectAnomalies } from "../../core/anomalyDetector.js";
+import { CONTEXT_WINDOW_SIZE } from "../../core/config.js";
 import type { ParsedSession } from "../../types/jsonl.js";
 import type { ContextOverhead } from "../../types/config.js";
 
@@ -68,7 +70,9 @@ export function Dashboard({ sessionFilePath, interval }: DashboardProps) {
   const totalInput = session.totalInputTokens + session.totalCacheReadTokens;
   const usedTokens = totalInput + session.totalOutputTokens;
 
-  // Recent messages for the log
+  const cacheHealth = analyzeCacheHealth(session.messages);
+  const anomalyReport = detectAnomalies(session.messages);
+
   const recentMessages = session.messages.slice(-8);
 
   return (
@@ -92,15 +96,77 @@ export function Dashboard({ sessionFilePath, interval }: DashboardProps) {
 
       <ContextBar used={usedTokens} total={CONTEXT_WINDOW_SIZE} overhead={overhead} />
 
+      {/* Cache Health */}
+      <Box paddingX={1} marginTop={1}>
+        <Text>
+          Cache:{" "}
+          <Text
+            color={
+              cacheHealth.status === "healthy" ? "green" :
+              cacheHealth.status === "degraded" ? "yellow" :
+              cacheHealth.status === "broken" ? "red" :
+              undefined
+            }
+            bold
+          >
+            {cacheHealth.status === "healthy" ? "HEALTHY" :
+             cacheHealth.status === "degraded" ? "DEGRADED" :
+             cacheHealth.status === "broken" ? "!! BROKEN" :
+             "ANALYZING"}
+          </Text>
+          <Text dimColor>
+            {" "}({(cacheHealth.currentHitRate * 100).toFixed(0)}% hit rate
+            {cacheHealth.estimatedWaste > 0.01 ? `, ~${formatCost(cacheHealth.estimatedWaste)} wasted` : ""})
+          </Text>
+        </Text>
+      </Box>
+      {cacheHealth.alert && (
+        <Box paddingX={1}>
+          <Text color={cacheHealth.status === "broken" ? "red" : "yellow"}>
+            {"  "}{cacheHealth.alert}
+          </Text>
+        </Box>
+      )}
+      {cacheHealth.recommendation && (
+        <Box paddingX={1}>
+          <Text dimColor>{"  -> "}{cacheHealth.recommendation}</Text>
+        </Box>
+      )}
+
+      {/* Anomalies */}
+      {anomalyReport.anomalies.length > 0 && (
+        <Box flexDirection="column" paddingX={1} marginTop={1}>
+          <Text bold color={anomalyReport.sessionHealth === "critical" ? "red" : "yellow"}>
+            Anomalies ({anomalyReport.anomalies.length}):
+          </Text>
+          {anomalyReport.anomalies.slice(-3).map((a, i) => (
+            <Box key={i} paddingLeft={2}>
+              <Text color={a.severity === "critical" ? "red" : "yellow"}>
+                {a.severity === "critical" ? "!!" : ">>"} Turn {a.turnNumber}: {a.description}
+              </Text>
+            </Box>
+          ))}
+          {anomalyReport.anomalies.length > 3 && (
+            <Box paddingLeft={2}>
+              <Text dimColor>  ... and {anomalyReport.anomalies.length - 3} more</Text>
+            </Box>
+          )}
+        </Box>
+      )}
+
+      {/* Recent Messages with per-turn cache ratio */}
       <Box flexDirection="column" paddingX={1} marginTop={1}>
         <Text bold>Recent Messages:</Text>
         {recentMessages.map((msg, i) => {
           const cost = calculateMessageCost(msg);
+          const totalCacheable = msg.usage.cache_read_input_tokens + msg.usage.cache_creation_input_tokens + msg.usage.input_tokens;
+          const cacheRatio = totalCacheable > 0 ? (msg.usage.cache_read_input_tokens / totalCacheable * 100).toFixed(0) : "0";
           return (
             <Text key={i}>
               <Text dimColor>{msg.timestamp.slice(11, 19)}</Text>
               <Text> {formatTokens(msg.usage.input_tokens + msg.usage.output_tokens)} tok</Text>
               <Text color="yellow"> {formatCost(cost.totalCost)}</Text>
+              <Text dimColor> cache:{cacheRatio}%</Text>
             </Text>
           );
         })}

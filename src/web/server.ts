@@ -7,6 +7,8 @@ import {
   aggregateCosts,
 } from "../core/costCalculator.js";
 import { analyzeCacheUsage } from "../core/cacheAnalyzer.js";
+import { analyzeCacheHealth } from "../core/cacheHealthMonitor.js";
+import { detectAnomalies } from "../core/anomalyDetector.js";
 import { runFullAudit } from "../audit/recommendations.js";
 import type { ParsedMessage } from "../types/jsonl.js";
 
@@ -77,6 +79,8 @@ function handleReport(period: string): string {
   }
 
   const cache = analyzeCacheUsage(allMessages);
+  const cacheHealth = analyzeCacheHealth(allMessages);
+  const anomalyReport = detectAnomalies(allMessages);
   const hourly = aggregateCosts(allMessages, "hour");
 
   return JSON.stringify({
@@ -86,6 +90,14 @@ function handleReport(period: string): string {
     totalInput,
     totalOutput,
     cacheHitRate: cache.cacheHitRate,
+    cacheHealth: {
+      status: cacheHealth.status,
+      hitRate: cacheHealth.currentHitRate,
+      estimatedWaste: cacheHealth.estimatedWaste,
+      alert: cacheHealth.alert,
+    },
+    anomalies: anomalyReport.anomalies,
+    sessionHealth: anomalyReport.sessionHealth,
     sessionCount: sessions.length,
     sessions: sessions.sort((a, b) => b.cost - a.cost),
     hourly,

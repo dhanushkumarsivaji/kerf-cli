@@ -42,8 +42,10 @@ export function registerInitCommand(program: Command): void {
         const { execSync } = await import("node:child_process");
         try {
           execSync("which rtk", { stdio: "ignore" });
-          console.log(chalk.green("  Detected RTK (command compression) -- compatible!"));
-        } catch { /* not installed */ }
+          console.log(chalk.green("  Detected RTK (command compression) -- kerf will show combined savings!"));
+        } catch {
+          console.log(chalk.dim("  Tip: Install RTK for 60-90% bash compression (brew install rtk-ai/tap/rtk)"));
+        }
         try {
           execSync("which ccusage", { stdio: "ignore" });
           console.log(chalk.green("  Detected ccusage -- will import historical data"));

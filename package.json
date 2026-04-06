@@ -1,6 +1,6 @@
 {
   "name": "kerf-cli",
-  "version": "1.0.1",
+  "version": "1.2.0",
   "type": "module",
   "description": "Cost intelligence for Claude Code. Know before you spend.",
   "bin": {

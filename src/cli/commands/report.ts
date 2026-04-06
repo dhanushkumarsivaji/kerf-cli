@@ -9,6 +9,8 @@ import {
   formatTokens,
 } from "../../core/costCalculator.js";
 import { analyzeCacheUsage } from "../../core/cacheAnalyzer.js";
+import { analyzeCacheHealth } from "../../core/cacheHealthMonitor.js";
+import { detectAnomalies } from "../../core/anomalyDetector.js";
 import type { ParsedMessage } from "../../types/jsonl.js";
 
 export function registerReportCommand(program: Command): void {
@@ -96,6 +98,8 @@ export function registerReportCommand(program: Command): void {
 
       const cacheAnalysis = analyzeCacheUsage(allMessages);
       const cacheHitRate = cacheAnalysis.cacheHitRate;
+      const cacheHealth = analyzeCacheHealth(allMessages);
+      const anomalyReport = detectAnomalies(allMessages);
 
       if (opts.json) {
         console.log(
@@ -106,6 +110,14 @@ export function registerReportCommand(program: Command): void {
               totalInput,
               totalOutput,
               cacheHitRate,
+              cacheHealth: {
+                status: cacheHealth.status,
+                hitRate: cacheHealth.currentHitRate,
+                estimatedWaste: cacheHealth.estimatedWaste,
+                alert: cacheHealth.alert,
+              },
+              anomalies: anomalyReport.anomalies,
+              sessionHealth: anomalyReport.sessionHealth,
               sessions: sessionSummaries,
             },
             null,
@@ -129,8 +141,28 @@ export function registerReportCommand(program: Command): void {
       console.log(`  Total Cost:       ${chalk.bold(formatCost(totalCost))}`);
       console.log(`  Total Tokens:     ${formatTokens(totalInput)} in / ${formatTokens(totalOutput)} out`);
       console.log(`  Cache Hit Rate:   ${cacheHitRate.toFixed(1)}%`);
+      if (cacheHealth.status !== "unknown") {
+        const statusColor = cacheHealth.status === "healthy" ? chalk.green : cacheHealth.status === "degraded" ? chalk.yellow : chalk.red;
+        console.log(`  Cache Health:     ${statusColor(cacheHealth.status.toUpperCase())} (${(cacheHealth.currentHitRate * 100).toFixed(0)}% hit rate)`);
+        if (cacheHealth.estimatedWaste > 0.01) {
+          console.log(chalk.yellow(`  Estimated Waste:  ${formatCost(cacheHealth.estimatedWaste)} (from poor cache performance)`));
+        }
+      }
       console.log(`  Sessions:         ${sessionSummaries.length}`);
       console.log();
+
+      if (anomalyReport.anomalies.length > 0) {
+        console.log(chalk.bold(`  Anomalies Detected: ${anomalyReport.anomalies.length}`));
+        for (const a of anomalyReport.anomalies.slice(0, 5)) {
+          const color = a.severity === "critical" ? chalk.red : chalk.yellow;
+          console.log(color(`    [${a.severity.toUpperCase()}] ${a.description}`));
+          console.log(chalk.dim(`      -> ${a.recommendation}`));
+        }
+        if (anomalyReport.anomalies.length > 5) {
+          console.log(chalk.dim(`    ... and ${anomalyReport.anomalies.length - 5} more (use --json for full list)`));
+        }
+        console.log();
+      }
 
       if (opts.model || opts.sessions) {
         // Model breakdown
