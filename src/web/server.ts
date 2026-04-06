@@ -295,7 +295,7 @@ function parseQuery(url: string): Record<string, string> {
 }
 
 function sendJson(res: ServerResponse, data: string): void {
-  res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+  res.writeHead(200, { "Content-Type": "application/json" });
   res.end(data);
 }
 
@@ -312,7 +312,7 @@ export function startDashboardServer(port: number): void {
         sendJson(res, handleAudit());
       } else if (path === "/api/export") {
         const result = handleExport(query.period ?? "today", query.format ?? "csv");
-        res.writeHead(200, { "Content-Type": result.contentType, "Access-Control-Allow-Origin": "*" });
+        res.writeHead(200, { "Content-Type": result.contentType });
         res.end(result.content);
       } else {
         res.writeHead(200, { "Content-Type": "text/html" });
@@ -320,7 +320,8 @@ export function startDashboardServer(port: number): void {
       }
     } catch (err) {
       res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: String(err) }));
+      console.error("Dashboard error:", err);
+      res.end(JSON.stringify({ error: "Internal server error" }));
     }
   });
 
