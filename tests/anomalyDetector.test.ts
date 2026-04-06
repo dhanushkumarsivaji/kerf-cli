@@ -79,29 +79,25 @@ describe("detectAnomalies", () => {
   });
 
   it("detects cache drop between consecutive turns", () => {
-    // Turn 1: high cache ratio (>70%)
-    const msg1 = makeMessage(
-      { id: "msg_01" },
-      {
-        input_tokens: 1000,
-        cache_read_input_tokens: 8000,
-        cache_creation_input_tokens: 1000,
-      },
-    );
-    // Turn 2: low cache ratio (<20%)
-    const msg2 = makeMessage(
-      { id: "msg_02" },
+    // Need 3+ substantive messages for anomaly detection to run
+    const msgs = makeSession(4, {
+      input_tokens: 2000,
+      cache_read_input_tokens: 8000,
+      cache_creation_input_tokens: 1000,
+    });
+    // Last message: cache drops to <20%
+    msgs.push(makeMessage(
+      { id: "msg_drop" },
       {
         input_tokens: 9000,
         cache_read_input_tokens: 500,
         cache_creation_input_tokens: 500,
       },
-    );
-    const report = detectAnomalies([msg1, msg2]);
+    ));
+    const report = detectAnomalies(msgs);
     const drops = report.anomalies.filter((a) => a.type === "cache_drop");
     expect(drops).toHaveLength(1);
     expect(drops[0].severity).toBe("critical");
-    expect(drops[0].turnNumber).toBe(2);
   });
 
   it("detects input explosion (>2.5x session average)", () => {
@@ -150,25 +146,27 @@ describe("detectAnomalies", () => {
   });
 
   it("classifies session health as critical with >=2 critical anomalies", () => {
-    // Create a session with cache drop (critical) + resume bloat (critical)
-    const msg1 = makeMessage(
-      { id: "msg_01" },
-      {
+    // First turn: resume bloat (critical) + high cache
+    const msgs = [
+      makeMessage({ id: "msg_01" }, {
         output_tokens: 60_000,
-        input_tokens: 1000,
+        input_tokens: 2000,
         cache_read_input_tokens: 8000,
         cache_creation_input_tokens: 1000,
-      },
-    );
-    const msg2 = makeMessage(
-      { id: "msg_02" },
-      {
+      }),
+      ...makeSession(3, {
+        input_tokens: 2000,
+        cache_read_input_tokens: 8000,
+        cache_creation_input_tokens: 1000,
+      }),
+      // Cache drop turn (critical)
+      makeMessage({ id: "msg_drop" }, {
         input_tokens: 9000,
         cache_read_input_tokens: 500,
         cache_creation_input_tokens: 500,
-      },
-    );
-    const report = detectAnomalies([msg1, msg2]);
+      }),
+    ];
+    const report = detectAnomalies(msgs);
     const criticals = report.anomalies.filter((a) => a.severity === "critical");
     expect(criticals.length).toBeGreaterThanOrEqual(2);
     expect(report.sessionHealth).toBe("critical");

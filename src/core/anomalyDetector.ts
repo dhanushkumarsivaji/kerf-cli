@@ -31,11 +31,22 @@ export function detectAnomalies(messages: ParsedMessage[]): AnomalyReport {
     return { anomalies, sessionHealth: 'normal' };
   }
 
-  // Compute per-message costs
-  const costs = messages.map((msg) => calculateMessageCost(msg).totalCost);
+  // Filter to substantive messages only — skip streaming deltas and tiny intermediate messages
+  // A substantive message has meaningful token counts (not just output_tokens: 1 or input_tokens: 0)
+  const substantive = messages.filter((m) => {
+    const totalTokens = m.usage.input_tokens + m.usage.output_tokens + m.usage.cache_read_input_tokens + m.usage.cache_creation_input_tokens;
+    return totalTokens > 100;
+  });
 
-  // Session averages skip the first 2 messages (cold starts)
-  const steadyState = messages.slice(2);
+  if (substantive.length < 3) {
+    return { anomalies, sessionHealth: 'normal' };
+  }
+
+  // Compute per-message costs
+  const costs = substantive.map((msg) => calculateMessageCost(msg).totalCost);
+
+  // Session averages skip the first 2 substantive messages (cold starts)
+  const steadyState = substantive.slice(2);
   const steadyCosts = costs.slice(2);
 
   const avgCost = steadyCosts.length > 0
@@ -46,13 +57,13 @@ export function detectAnomalies(messages: ParsedMessage[]): AnomalyReport {
     ? steadyState.reduce((sum, m) => sum + m.usage.input_tokens, 0) / steadyState.length
     : 0;
 
-  for (let i = 0; i < messages.length; i++) {
-    const msg = messages[i];
+  for (let i = 0; i < substantive.length; i++) {
+    const msg = substantive[i];
     const cost = costs[i];
-    const turnNumber = i + 1;
+    const turnNumber = messages.indexOf(msg) + 1;
 
-    // 1. Cost spike: turn cost >3x session average (critical if >5x)
-    if (avgCost > 0 && i >= 2) {
+    // 1. Cost spike: turn cost >3x session average (only when average is meaningful)
+    if (avgCost > 0.01 && i >= 2) {
       const ratio = cost / avgCost;
       if (ratio > 5) {
         anomalies.push({
@@ -79,9 +90,9 @@ export function detectAnomalies(messages: ParsedMessage[]): AnomalyReport {
       }
     }
 
-    // 2. Cache drop: cache ratio drops from >70% to <20% between consecutive turns
+    // 2. Cache drop: ratio drops from >70% to <20% — only between substantive messages
     if (i > 0) {
-      const prevRatio = calculateCacheRatio(messages[i - 1]);
+      const prevRatio = calculateCacheRatio(substantive[i - 1]);
       const currRatio = calculateCacheRatio(msg);
       if (prevRatio > 0.7 && currRatio < 0.2) {
         anomalies.push({
@@ -97,8 +108,8 @@ export function detectAnomalies(messages: ParsedMessage[]): AnomalyReport {
       }
     }
 
-    // 3. Input explosion: input tokens >2.5x session average
-    if (avgInput > 0 && i >= 2) {
+    // 3. Input explosion: input tokens >2.5x average — only when average is meaningful (>1000)
+    if (avgInput > 1000 && i >= 2) {
       const inputRatio = msg.usage.input_tokens / avgInput;
       if (inputRatio > 2.5) {
         anomalies.push({
@@ -106,7 +117,7 @@ export function detectAnomalies(messages: ParsedMessage[]): AnomalyReport {
           severity: 'warning',
           turnNumber,
           messageId: msg.id,
-          description: `Input tokens ${msg.usage.input_tokens.toLocaleString()} is ${inputRatio.toFixed(1)}x the session average`,
+          description: `Input tokens ${msg.usage.input_tokens.toLocaleString()} is ${inputRatio.toFixed(1)}x the session average of ${Math.round(avgInput).toLocaleString()}`,
           metric: inputRatio,
           expectedRange: `< ${Math.round(avgInput * 2.5).toLocaleString()} tokens`,
           recommendation: 'Check for large file reads or excessive context being sent',
@@ -128,7 +139,7 @@ export function detectAnomalies(messages: ParsedMessage[]): AnomalyReport {
       });
     }
 
-    // 5. Resume bloat: first turn >50K output tokens
+    // 5. Resume bloat: first substantive turn >50K output tokens
     if (i === 0 && msg.usage.output_tokens > 50_000) {
       anomalies.push({
         type: 'resume_bloat',
