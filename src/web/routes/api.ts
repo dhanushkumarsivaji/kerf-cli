@@ -149,6 +149,52 @@ function buildReport(db: Database.Database, period: string): unknown {
   };
 }
 
+interface CostBucket {
+  bucket: string;
+  opus: number;
+  sonnet: number;
+  haiku: number;
+  other: number;
+  total: number;
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function fillCostTrendGaps(rows: CostBucket[], period: string): CostBucket[] {
+  if (period === "all" || rows.length === 0) return rows;
+
+  const lookup = new Map(rows.map((r) => [r.bucket, r]));
+  const filled: CostBucket[] = [];
+
+  if (period === "today") {
+    // Fill every hour from 00:00 today through current hour
+    const now = new Date();
+    const ymd = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+    for (let h = 0; h <= now.getHours(); h++) {
+      const key = `${ymd} ${pad2(h)}:00`;
+      filled.push(
+        lookup.get(key) ?? { bucket: key, opus: 0, sonnet: 0, haiku: 0, other: 0, total: 0 },
+      );
+    }
+    return filled;
+  }
+
+  // week / month: fill every day from period start through today
+  const days = period === "week" ? 7 : 30;
+  const cursor = new Date();
+  cursor.setDate(cursor.getDate() - (days - 1));
+  for (let i = 0; i < days; i++) {
+    const key = `${cursor.getFullYear()}-${pad2(cursor.getMonth() + 1)}-${pad2(cursor.getDate())}`;
+    filled.push(
+      lookup.get(key) ?? { bucket: key, opus: 0, sonnet: 0, haiku: 0, other: 0, total: 0 },
+    );
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return filled;
+}
+
 function buildCostTrend(db: Database.Database, period: string): unknown {
   const filter = periodSql(period);
   const groupBy =
@@ -169,9 +215,9 @@ function buildCostTrend(db: Database.Database, period: string): unknown {
        FROM messages WHERE ${filter}
        GROUP BY bucket ORDER BY bucket`,
     )
-    .all();
+    .all() as CostBucket[];
 
-  return rows;
+  return fillCostTrendGaps(rows, period);
 }
 
 interface SessionRow {
