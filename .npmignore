@@ -5,5 +5,6 @@ tsconfig.json
 tsup.config.ts
 .gitignore
 CLAUDE.md
-kerf-implementation-guide.md
 vitest.config.ts
+MY-GUIDE.md
+.claude/
