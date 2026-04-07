@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-04-07
+
+### Added
+- Real dashboard hero screenshot (`docs/assets/dashboard-hero.png`) — captured
+  from the actual running dashboard with real data, not a mockup
+- Honesty disclaimer on README hero image
+
+### Fixed (cumulative across 2.1.x patches)
+- **Parser dedup**: now MAX-merges duplicate message IDs per field instead of
+  taking last value. Streaming JSONL emits partial usage updates per chunk; the
+  old "last" merge was dropping input tokens entirely (2.1.3)
+- **Cache hit rate formula**: now `cache_read / (input + cache_read + cache_creation)`
+  in api.ts and cacheReporter.ts (was excluding cache_creation, returning ~100%) (2.1.3)
+- **Cost chart paint order**: replaced `buildAreaPath` with `buildBandPath` so
+  stacked bands render as distinct opus/sonnet/haiku layers (was: opus painted on
+  top covering everything) (2.1.3)
+- **Sticky hero clipping**: removed `position: sticky` + backdrop blur from hero
+  that was hiding the killer features cards (2.1.3)
+- **Hero "Tokens" metric**: now includes cache_creation tokens (2.1.3)
+- **Period label inconsistency**: added "FOR TODAY/LAST 7 DAYS/LAST 30 DAYS/ALL TIME"
+  indicator above metrics; removed period suffix from "Spent" label (2.1.3)
+- **Y-axis ugly decimals**: added `niceTicks` helper rounding to clean integers
+  ($0/$5/$10/$15/$20 instead of $4.1/$8.1) (2.1.3)
+- **fmtDuration confusing multi-day**: capped at "1d+" for resumed sessions (2.1.3)
+- **Cost chart x-axis gaps**: `fillCostTrendGaps` emits zero buckets for missing
+  hours/days so the time axis is continuous (2.1.4)
+- **Recharts blank dashboard**: replaced Recharts (which failed on transitive
+  esm.sh deps) with inline SVG chart and donut (2.1.1)
+- **Sessions table**: added pagination, sortable headers, formatted Date/Time
+  columns, click-to-expand detail row (2.1.2)
+- **`--version` reads from package.json**: was hardcoded (2.1.1)
+
 ## [2.1.0] - 2026-04-07
 
 ### Added — Polished Web Dashboard

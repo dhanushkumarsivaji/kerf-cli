@@ -9,7 +9,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node 20+](https://img.shields.io/badge/node-20%2B-green.svg)]()
 
-![kerf dashboard](docs/assets/dashboard-preview.png)
+![kerf dashboard](docs/assets/dashboard-hero.png)
+
+> The dashboard above is a real screenshot from my own machine — `$70.52 spent today, 5 sessions, 98% cache hit rate, no budget set, 100% Opus`. Your numbers will look different.
 
 Kerf reads your Claude Code sessions into a local SQLite database you can query with SQL. It surfaces wasted Opus spend, tracks cache hit rate, enforces budgets via Claude Code hooks, and ships a polished local web dashboard.
 
