@@ -245,6 +245,82 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     .pill.other { background: rgba(107, 114, 128, 0.15); color: var(--color-model-other); }
 
     .cost-text { font-family: var(--font-mono); font-weight: 600; }
+    .mono-text { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+    /* Data grid: sortable headers + detail row */
+    .data-grid thead th { cursor: default; }
+    .data-grid thead th.sortable { cursor: pointer; }
+    .data-grid thead th.sortable:hover { color: var(--color-text-primary); }
+    .data-grid tbody tr.detail-row { background: var(--color-bg-base); }
+    .data-grid tbody tr.detail-row:hover { background: var(--color-bg-base); }
+    .detail-cell {
+      padding: var(--space-5) var(--space-4) !important;
+      border-bottom: 1px solid var(--color-border-default) !important;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: var(--space-5);
+    }
+    .detail-section { min-width: 0; }
+    .detail-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--color-text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .detail-value {
+      font-size: 12px;
+      color: var(--color-text-primary);
+      line-height: 1.6;
+    }
+
+    /* Pagination */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-3) var(--space-4);
+      border-top: 1px solid var(--color-border-subtle);
+      background: var(--color-bg-surface);
+    }
+    .pagination-info {
+      font-size: 11px;
+      color: var(--color-text-tertiary);
+      font-variant-numeric: tabular-nums;
+    }
+    .pagination-controls {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .page-btn {
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--color-border-subtle);
+      color: var(--color-text-secondary);
+      width: 28px;
+      height: 28px;
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+    .page-btn:hover:not(:disabled) {
+      background: var(--color-bg-hover);
+      color: var(--color-text-primary);
+      border-color: var(--color-border-default);
+    }
+    .page-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .page-indicator {
+      font-size: 11px;
+      color: var(--color-text-secondary);
+      padding: 0 var(--space-3);
+      font-variant-numeric: tabular-nums;
+    }
 
     /* Empty state */
     .empty {
@@ -330,6 +406,36 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       if (s < 3600) return Math.floor(s / 60) + 'm ago';
       if (s < 86400) return Math.floor(s / 3600) + 'h ago';
       return Math.floor(s / 86400) + 'd ago';
+    };
+    const pad = (n) => String(n).padStart(2, '0');
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const fmtDate = (iso) => {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+    };
+    const fmtTime = (iso) => {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    };
+    const fmtDateTime = (iso) => {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    };
+    const fmtDuration = (startIso, endIso) => {
+      if (!startIso || !endIso) return '—';
+      const ms = new Date(endIso).getTime() - new Date(startIso).getTime();
+      if (ms < 0) return '—';
+      const s = Math.floor(ms / 1000);
+      if (s < 60) return s + 's';
+      const m = Math.floor(s / 60);
+      if (m < 60) return m + 'm ' + (s % 60) + 's';
+      const h = Math.floor(m / 60);
+      if (h < 24) return h + 'h ' + (m % 60) + 'm';
+      const days = Math.floor(h / 24);
+      return days + 'd ' + (h % 24) + 'h';
     };
     const modelClass = (m) => {
       if (!m) return 'other';
@@ -603,8 +709,52 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       );
     }
 
-    function SessionTable({ sessions }) {
+    function SortHeader({ label, sortKey, currentSort, currentOrder, onSort, numeric }) {
+      const isActive = currentSort === sortKey;
+      const arrow = !isActive ? '' : currentOrder === 'asc' ? ' ↑' : ' ↓';
+      return e('th', {
+        className: numeric ? 'numeric sortable' : 'sortable',
+        onClick: () => onSort(sortKey),
+        style: { color: isActive ? 'var(--color-text-primary)' : undefined },
+      }, label, arrow);
+    }
+
+    function Pagination({ total, limit, offset, setOffset }) {
+      const page = Math.floor(offset / limit) + 1;
+      const totalPages = Math.max(1, Math.ceil(total / limit));
+      const start = total === 0 ? 0 : offset + 1;
+      const end = Math.min(offset + limit, total);
+      return e('div', { className: 'pagination' },
+        e('div', { className: 'pagination-info' }, 'Showing ' + start + '–' + end + ' of ' + total),
+        e('div', { className: 'pagination-controls' },
+          e('button', {
+            className: 'page-btn',
+            disabled: offset === 0,
+            onClick: () => setOffset(0),
+          }, '«'),
+          e('button', {
+            className: 'page-btn',
+            disabled: offset === 0,
+            onClick: () => setOffset(Math.max(0, offset - limit)),
+          }, '‹'),
+          e('span', { className: 'page-indicator' }, 'Page ' + page + ' of ' + totalPages),
+          e('button', {
+            className: 'page-btn',
+            disabled: offset + limit >= total,
+            onClick: () => setOffset(offset + limit),
+          }, '›'),
+          e('button', {
+            className: 'page-btn',
+            disabled: offset + limit >= total,
+            onClick: () => setOffset((totalPages - 1) * limit),
+          }, '»')
+        )
+      );
+    }
+
+    function SessionTable({ sessions, total, limit, offset, setOffset, sort, order, setSort }) {
       const [expanded, setExpanded] = useState(null);
+
       if (!sessions || sessions.length === 0) {
         return e('div', { className: 'empty' },
           e('div', { className: 'empty-icon' }, '∅'),
@@ -612,57 +762,111 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
           e('div', { className: 'empty-body' }, 'Use Claude Code to create some sessions, then click sync.')
         );
       }
+
       const projectName = (path) => {
         const parts = path.split('/');
         return parts[parts.length - 1] || path;
       };
-      return e('div', { className: 'table-wrap' },
-        e('table', null,
-          e('thead', null,
-            e('tr', null,
-              e('th', null, 'When'),
-              e('th', null, 'Project'),
-              e('th', null, 'Models'),
-              e('th', { className: 'numeric' }, 'Msgs'),
-              e('th', { className: 'numeric' }, 'Tokens'),
-              e('th', { className: 'numeric' }, 'Cost')
-            )
-          ),
-          e('tbody', null,
-            sessions.map((s) => {
-              const tokens = s.totalInputTokens + s.totalOutputTokens + s.totalCacheRead;
-              return e(React.Fragment, { key: s.sessionId },
-                e('tr', { onClick: () => setExpanded(expanded === s.sessionId ? null : s.sessionId), style: { cursor: 'pointer' } },
-                  e('td', null, fmtRel(s.lastMessageAt)),
-                  e('td', { title: s.projectPath }, projectName(s.projectPath)),
-                  e('td', null,
-                    s.models.slice(0, 3).map((m, i) => e('span', { key: i, className: 'pill ' + modelClass(m), style: { marginRight: 4 } }, shortModel(m)))
+
+      const handleSort = (key) => {
+        if (sort === key) {
+          setSort(key, order === 'asc' ? 'desc' : 'asc');
+        } else {
+          setSort(key, 'desc');
+        }
+      };
+
+      return e('div', null,
+        e('div', { className: 'table-wrap' },
+          e('table', { className: 'data-grid' },
+            e('thead', null,
+              e('tr', null,
+                e(SortHeader, { label: 'Date', sortKey: 'recent', currentSort: sort, currentOrder: order, onSort: handleSort }),
+                e('th', null, 'Time'),
+                e('th', null, 'Project'),
+                e('th', null, 'Models'),
+                e(SortHeader, { label: 'Msgs', sortKey: 'messages', currentSort: sort, currentOrder: order, onSort: handleSort, numeric: true }),
+                e('th', { className: 'numeric' }, 'Tokens'),
+                e(SortHeader, { label: 'Duration', sortKey: 'duration', currentSort: sort, currentOrder: order, onSort: handleSort, numeric: true }),
+                e(SortHeader, { label: 'Cost', sortKey: 'cost', currentSort: sort, currentOrder: order, onSort: handleSort, numeric: true })
+              )
+            ),
+            e('tbody', null,
+              sessions.map((s) => {
+                const tokens = s.totalInputTokens + s.totalOutputTokens + s.totalCacheRead;
+                return e(React.Fragment, { key: s.sessionId },
+                  e('tr', {
+                    onClick: () => setExpanded(expanded === s.sessionId ? null : s.sessionId),
+                    style: { cursor: 'pointer' },
+                  },
+                    e('td', null, fmtDate(s.lastMessageAt)),
+                    e('td', { className: 'mono-text' }, fmtTime(s.lastMessageAt)),
+                    e('td', { title: s.projectPath }, projectName(s.projectPath)),
+                    e('td', null,
+                      s.models.slice(0, 3).map((m, i) =>
+                        e('span', { key: i, className: 'pill ' + modelClass(m), style: { marginRight: 4 } }, shortModel(m))
+                      )
+                    ),
+                    e('td', { className: 'numeric' }, s.messageCount.toLocaleString()),
+                    e('td', { className: 'numeric mono-text', style: { color: 'var(--color-text-secondary)' } }, fmtTokens(tokens)),
+                    e('td', { className: 'numeric mono-text', style: { color: 'var(--color-text-secondary)' } }, fmtDuration(s.firstMessageAt, s.lastMessageAt)),
+                    e('td', { className: 'numeric cost-text' }, fmtCost(s.totalCostUsd))
                   ),
-                  e('td', { className: 'numeric' }, s.messageCount),
-                  e('td', { className: 'numeric' }, fmtTokens(tokens)),
-                  e('td', { className: 'numeric cost-text' }, fmtCost(s.totalCostUsd))
-                ),
-                expanded === s.sessionId ? e('tr', null,
-                  e('td', { colSpan: 6, style: { background: 'var(--color-bg-base)', padding: 'var(--space-4)', fontSize: 11, color: 'var(--color-text-secondary)' } },
-                    e('div', null, 'Session ID: ', e('span', { style: { fontFamily: 'var(--font-mono)' } }, s.sessionId)),
-                    e('div', { style: { marginTop: 4 } }, 'Path: ', s.projectPath),
-                    e('div', { style: { marginTop: 4 } }, 'Started: ', s.firstMessageAt, ' · Ended: ', s.lastMessageAt),
-                    e('div', { style: { marginTop: 4 } },
-                      'In: ', fmtTokens(s.totalInputTokens), ' · Out: ', fmtTokens(s.totalOutputTokens),
-                      ' · Cache R: ', fmtTokens(s.totalCacheRead), ' · Cache W: ', fmtTokens(s.totalCacheCreation)
+                  expanded === s.sessionId ? e('tr', { className: 'detail-row' },
+                    e('td', { colSpan: 8, className: 'detail-cell' },
+                      e('div', { className: 'detail-grid' },
+                        e('div', { className: 'detail-section' },
+                          e('div', { className: 'detail-label' }, 'Session'),
+                          e('div', { className: 'detail-value mono-text', style: { wordBreak: 'break-all' } }, s.sessionId),
+                          e('div', { className: 'detail-label', style: { marginTop: 8 } }, 'Project path'),
+                          e('div', { className: 'detail-value' }, s.projectPath)
+                        ),
+                        e('div', { className: 'detail-section' },
+                          e('div', { className: 'detail-label' }, 'Started'),
+                          e('div', { className: 'detail-value' }, fmtDate(s.firstMessageAt), ' · ', fmtTime(s.firstMessageAt)),
+                          e('div', { className: 'detail-label', style: { marginTop: 8 } }, 'Ended'),
+                          e('div', { className: 'detail-value' }, fmtDate(s.lastMessageAt), ' · ', fmtTime(s.lastMessageAt)),
+                          e('div', { className: 'detail-label', style: { marginTop: 8 } }, 'Duration'),
+                          e('div', { className: 'detail-value' }, fmtDuration(s.firstMessageAt, s.lastMessageAt))
+                        ),
+                        e('div', { className: 'detail-section' },
+                          e('div', { className: 'detail-label' }, 'Tokens'),
+                          e('div', { className: 'detail-value' },
+                            'Input: ', e('span', { className: 'mono-text' }, fmtTokens(s.totalInputTokens)), e('br'),
+                            'Output: ', e('span', { className: 'mono-text' }, fmtTokens(s.totalOutputTokens)), e('br'),
+                            'Cache read: ', e('span', { className: 'mono-text' }, fmtTokens(s.totalCacheRead)), e('br'),
+                            'Cache write: ', e('span', { className: 'mono-text' }, fmtTokens(s.totalCacheCreation))
+                          )
+                        ),
+                        e('div', { className: 'detail-section' },
+                          e('div', { className: 'detail-label' }, 'Cost'),
+                          e('div', { className: 'detail-value cost-text', style: { fontSize: 18 } }, fmtCost(s.totalCostUsd)),
+                          e('div', { className: 'detail-label', style: { marginTop: 8 } }, 'Models'),
+                          e('div', { className: 'detail-value' },
+                            s.models.map((m, i) =>
+                              e('span', { key: i, className: 'pill ' + modelClass(m), style: { marginRight: 4 } }, shortModel(m))
+                            )
+                          )
+                        )
+                      )
                     )
-                  )
-                ) : null
-              );
-            })
+                  ) : null
+                );
+              })
+            )
           )
-        )
+        ),
+        e(Pagination, { total: total ?? sessions.length, limit, offset, setOffset })
       );
     }
 
     function App() {
       const [period, setPeriod] = useState('today');
       const [refreshKey, setRefreshKey] = useState(0);
+      const [sessionOffset, setSessionOffset] = useState(0);
+      const [sessionSort, setSessionSort] = useState('recent');
+      const [sessionOrder, setSessionOrder] = useState('desc');
+      const sessionLimit = 15;
 
       // Auto-refresh every 5 seconds
       useEffect(() => {
@@ -670,13 +874,23 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
         return () => clearInterval(t);
       }, []);
 
+      const handleSetSort = (key, order) => {
+        setSessionSort(key);
+        setSessionOrder(order);
+        setSessionOffset(0);
+      };
+
       const reportApi = useApi('/api/report?period=' + period, refreshKey);
       const trendApi = useApi('/api/cost-trend?period=' + period, refreshKey);
-      const sessionsApi = useApi('/api/sessions?limit=20&sort=recent&order=desc', refreshKey);
+      const sessionsApi = useApi(
+        '/api/sessions?limit=' + sessionLimit + '&offset=' + sessionOffset + '&sort=' + sessionSort + '&order=' + sessionOrder,
+        refreshKey,
+      );
       const budgetApi = useApi('/api/budget', refreshKey);
 
       const report = reportApi.data;
       const sessions = sessionsApi.data?.sessions ?? [];
+      const sessionsTotal = sessionsApi.data?.total ?? 0;
 
       const isEmpty = !reportApi.loading && (!report || report.totalSessions === 0);
       if (isEmpty) {
@@ -718,10 +932,19 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
         e('div', { className: 'section' },
           e('div', { className: 'section-header' },
-            e('div', { className: 'section-title' }, 'Recent sessions'),
-            e('div', { style: { fontSize: 11, color: 'var(--color-text-tertiary)' } }, sessionsApi.data?.total ?? 0, ' total')
+            e('div', { className: 'section-title' }, 'Sessions'),
+            e('div', { style: { fontSize: 11, color: 'var(--color-text-tertiary)' } }, sessionsTotal.toLocaleString(), ' total')
           ),
-          e(SessionTable, { sessions })
+          e(SessionTable, {
+            sessions,
+            total: sessionsTotal,
+            limit: sessionLimit,
+            offset: sessionOffset,
+            setOffset: setSessionOffset,
+            sort: sessionSort,
+            order: sessionOrder,
+            setSort: handleSetSort,
+          })
         ),
 
         e('div', { style: { textAlign: 'center', padding: 'var(--space-6)', color: 'var(--color-text-tertiary)', fontSize: 11 } },
