@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node 20+](https://img.shields.io/badge/node-20%2B-green.svg)]()
 
-![kerf dashboard](docs/assets/dashboard-hero.png)
+![kerf dashboard](docs/assets/dashboard-week.png)
 
 > Real screenshot from my own machine — `$172.16 spent in the last 7 days, 25 sessions, 98% cache hit rate, 37% of weekly budget used, $136/mo Opus → Sonnet savings`. Your numbers will look different.
 
