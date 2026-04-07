@@ -910,7 +910,11 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     }
 
     function App() {
-      const [period, setPeriod] = useState('today');
+      const initialPeriod = (() => {
+        const p = new URLSearchParams(window.location.search).get('period');
+        return ['today', 'week', 'month', 'all'].includes(p) ? p : 'today';
+      })();
+      const [period, setPeriod] = useState(initialPeriod);
       const [refreshKey, setRefreshKey] = useState(0);
       const [sessionOffset, setSessionOffset] = useState(0);
       const [sessionSort, setSessionSort] = useState('recent');
