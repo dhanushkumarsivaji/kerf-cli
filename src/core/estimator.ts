@@ -1,6 +1,9 @@
+import dayjs from "dayjs";
 import { glob } from "glob";
 import { countFileTokens, countFileTokensAccurate, estimateContextOverhead } from "./tokenCounter.js";
-import { resolveModelPricing, formatCost } from "./costCalculator.js";
+import { resolveModelPricing, formatCost, calculateMessageCost } from "./costCalculator.js";
+import { getActiveSessions } from "./parser.js";
+import { BILLING_WINDOW_HOURS } from "./config.js";
 import type { CostEstimate, EstimateOptions, ComplexitySignals } from "../types/config.js";
 import type { ModelPricing } from "../types/pricing.js";
 
@@ -184,7 +187,24 @@ export async function estimateTaskCost(
   const totalToolOverhead = toolCallsPerTurn * TOKENS_PER_TOOL_CALL * turns.expected;
 
   const typicalWindowCost = TYPICAL_WINDOW_COSTS[model] ?? TYPICAL_WINDOW_COSTS.sonnet;
-  const percentOfWindow = Math.min(100, Math.round((expectedCost / typicalWindowCost) * 100));
+  const percentOfTypicalWindow = Math.min(100, Math.round((expectedCost / typicalWindowCost) * 100));
+
+  // Compute actual rolling 5-hour window spend
+  let actualWindowSpentUsd = 0;
+  try {
+    const activeSessions = await getActiveSessions();
+    const cutoff = dayjs().subtract(BILLING_WINDOW_HOURS, "hour");
+    for (const session of activeSessions) {
+      for (const msg of session.messages) {
+        if (dayjs(msg.timestamp).isAfter(cutoff)) {
+          actualWindowSpentUsd += calculateMessageCost(msg).totalCost;
+        }
+      }
+    }
+  } catch {
+    // No active sessions or parse error — leave at 0
+  }
+  const actualWindowPercentUsed = Math.min(100, Math.round((actualWindowSpentUsd / typicalWindowCost) * 100));
 
   // Recommendations
   const recommendations: string[] = [];
@@ -229,7 +249,9 @@ export async function estimateTaskCost(
     contextOverhead: overhead.totalOverhead,
     fileTokens,
     fileCount,
-    percentOfWindow,
+    percentOfTypicalWindow,
+    actualWindowSpentUsd,
+    actualWindowPercentUsed,
     recommendations,
     complexitySignals: signals,
     detectedComplexity: complexityLabel,

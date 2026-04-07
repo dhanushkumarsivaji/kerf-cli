@@ -113,4 +113,42 @@ export function registerBudgetCommand(program: Command): void {
 
       manager.close();
     });
+
+  budget
+    .command("check")
+    .description("Check budget (for use in PreToolUse hook). Exits 2 if over budget.")
+    .option("--project <path>", "Project path")
+    .option("--json", "JSON output")
+    .action((opts) => {
+      const manager = new BudgetManager();
+      const projectPath = opts.project || process.cwd();
+      const status = manager.checkBudget(projectPath);
+
+      if (!status) {
+        // No budget configured — silent pass
+        manager.close();
+        process.exit(0);
+      }
+
+      if (opts.json) {
+        console.log(JSON.stringify(status));
+        manager.close();
+        process.exit(status.isOverBudget ? 2 : 0);
+      }
+
+      if (status.isOverBudget) {
+        const reason = `Kerf budget exceeded: ${formatCost(status.spent)} of ${formatCost(status.budget)} (${status.percentUsed.toFixed(0)}%). Run \`kerf budget show\` for details.`;
+        process.stderr.write(JSON.stringify({ reason, decision: "block" }) + "\n");
+        manager.close();
+        process.exit(2);
+      }
+
+      if (status.percentUsed >= 80) {
+        const reason = `Kerf budget warning: ${formatCost(status.spent)} of ${formatCost(status.budget)} (${status.percentUsed.toFixed(0)}%).`;
+        process.stderr.write(JSON.stringify({ reason }) + "\n");
+      }
+
+      manager.close();
+      process.exit(0);
+    });
 }

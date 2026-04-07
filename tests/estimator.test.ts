@@ -70,10 +70,17 @@ describe("estimateTaskCost", () => {
     expect(result.contextOverhead).toBeGreaterThan(0);
   });
 
-  it("percentOfWindow is reasonable", async () => {
+  it("percentOfTypicalWindow is reasonable", async () => {
     const result = await estimateTaskCost("build a complete web application from scratch", { model: "sonnet" });
-    expect(result.percentOfWindow).toBeGreaterThan(0);
-    expect(result.percentOfWindow).toBeLessThanOrEqual(100);
+    expect(result.percentOfTypicalWindow).toBeGreaterThan(0);
+    expect(result.percentOfTypicalWindow).toBeLessThanOrEqual(100);
+  });
+
+  it("includes actual rolling window spend (>= 0, capped at 100%)", async () => {
+    const result = await estimateTaskCost("fix bug", { model: "sonnet" });
+    expect(result.actualWindowSpentUsd).toBeGreaterThanOrEqual(0);
+    expect(result.actualWindowPercentUsed).toBeGreaterThanOrEqual(0);
+    expect(result.actualWindowPercentUsed).toBeLessThanOrEqual(100);
   });
 
   it("includes recommendations for sonnet", async () => {

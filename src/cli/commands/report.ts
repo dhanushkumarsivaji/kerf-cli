@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import dayjs from "dayjs";
-import { parseSessionFile, findJsonlFiles } from "../../core/parser.js";
+import { parseSessionFile, findJsonlFiles, findJsonlFilesForProject } from "../../core/parser.js";
 import {
   calculateMessageCost,
   aggregateCosts,
@@ -24,9 +24,16 @@ export function registerReportCommand(program: Command): void {
     .option("--csv", "Export as CSV")
     .option("--json", "Export as JSON")
     .action(async (opts) => {
-      const files = await findJsonlFiles(opts.project);
+      const files = opts.project
+        ? findJsonlFilesForProject(opts.project)
+        : await findJsonlFiles();
 
       if (files.length === 0) {
+        if (opts.project) {
+          console.error(`No Claude Code sessions found for project: ${opts.project}`);
+          console.error(`Looked in: ~/.claude/projects/${opts.project.replace(/\//g, "-")}/`);
+          process.exit(1);
+        }
         console.log("No session data found. Start using Claude Code to generate data.");
         return;
       }

@@ -58,7 +58,8 @@ export function EstimateCard({ task, estimate }: EstimateCardProps) {
           ? "precise (via Anthropic API)"
           : "heuristic (set ANTHROPIC_API_KEY for precise counts)"}
       </Text>
-      <Text>Window Usage: ~{estimate.percentOfWindow}% of 5-hour window</Text>
+      <Text>Cost vs typical 5h window: ~{estimate.percentOfTypicalWindow}%</Text>
+      <Text>Last 5h actual spend: ${estimate.actualWindowSpentUsd.toFixed(2)} ({estimate.actualWindowPercentUsed}% of typical)</Text>
       {estimate.recommendations.map((rec, i) => (
         <Text key={i} color="cyan">
           {"  -> "}{rec}

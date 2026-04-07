@@ -42,6 +42,13 @@ fi
 exit 0
 `;
 
+const PRETOOL_HOOK = `#!/bin/bash
+# kerf-cli PreToolUse hook — blocks tool calls when over budget
+KERF_BIN=\$(which kerf-cli 2>/dev/null || which kerf 2>/dev/null || echo "npx kerf-cli@latest")
+\$KERF_BIN budget check 2>&1
+exit \$?
+`;
+
 interface HookConfig {
   matcher: string;
   hooks: Array<{ type: string; command: string }>;
@@ -52,7 +59,7 @@ interface SettingsWithHooks {
   [key: string]: unknown;
 }
 
-export function installHooks(options: { global?: boolean; force?: boolean } = {}): {
+export function installHooks(options: { global?: boolean; force?: boolean; enforceBudgets?: boolean } = {}): {
   installed: string[];
   skipped: string[];
   settingsPath: string;
@@ -88,9 +95,11 @@ export function installHooks(options: { global?: boolean; force?: boolean } = {}
 
   const notificationPath = join(hooksDir, "notification.sh");
   const stopPath = join(hooksDir, "stop.sh");
+  const preToolPath = join(hooksDir, "pretool.sh");
 
   writeFileSync(notificationPath, NOTIFICATION_HOOK, { mode: 0o755 });
   writeFileSync(stopPath, STOP_HOOK, { mode: 0o755 });
+  writeFileSync(preToolPath, PRETOOL_HOOK, { mode: 0o755 });
 
   // Notification hook
   if (!hasKerfHook(settings.hooks, "Notification")) {
@@ -106,6 +115,16 @@ export function installHooks(options: { global?: boolean; force?: boolean } = {}
     installed.push("Stop");
   } else {
     skipped.push("Stop (already installed)");
+  }
+
+  // PreToolUse hook — only if --enforce-budgets opt-in
+  if (options.enforceBudgets) {
+    if (!hasKerfHook(settings.hooks, "PreToolUse")) {
+      addHook(settings.hooks, "PreToolUse", preToolPath);
+      installed.push("PreToolUse (budget enforcement)");
+    } else {
+      skipped.push("PreToolUse (already installed)");
+    }
   }
 
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2));

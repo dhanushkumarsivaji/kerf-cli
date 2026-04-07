@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-04-07
+
+The analytics rewrite. Kerf is now SQLite-backed: ingest your Claude Code sessions
+once, query them forever.
+
+### Added
+- **SQLite analytics layer** — `messages`, `sessions_meta`, `ingest_state`, `daily_summaries` tables
+- **`kerf sync`** — incremental ingest of all Claude Code session JSONLs into SQLite
+- **`kerf summary`** — daily/weekly/monthly cost summaries with --by-project and --model breakdowns
+- **`kerf sessions`** — list and inspect individual sessions with cost, models, duration
+- **`kerf query "<sql>"`** — read-only SQL escape hatch over the analytics database
+- **`kerf efficiency`** — model usage analyzer with concrete savings recommendations (Opus → Sonnet)
+- **`kerf cache`** — cross-session cache hit rate analysis
+- **`kerf doctor`** — diagnose Claude Code integration and kerf setup issues
+- **`kerf budget check`** — exit-code-driven budget check for PreToolUse hook
+- **`kerf init --enforce-budgets`** — installs PreToolUse hook that BLOCKS Claude Code over budget
+- Real database migrations (schema versioning + idempotent upgrades)
+- Tests for parser path encoding and migrations
+
+### Changed
+- BREAKING: `percentOfWindow` renamed to `percentOfTypicalWindow` and joined by `actualWindowSpentUsd` + `actualWindowPercentUsed`
+- BREAKING: Web dashboard removed (deferred to v2.x team tier)
+- BREAKING: Database schema now lives in `migrations.ts`, not `schema.ts`
+- Estimator output now shows both typical-window % and actual rolling 5h spend
+
+### Fixed
+- `report --project` now correctly resolves Claude Code's encoded project paths
+- Budget sync correctly uses Claude Code's path encoding (not naive substring match)
+- Removed dead code: `src/integrations/rtkIntegration.ts`
+
+### Upgrade notes
+On first run after upgrade, kerf will run schema migrations automatically. Run `kerf sync`
+once to populate the new analytics tables. No data migration is needed — kerf re-reads
+your `~/.claude/projects/` JSONLs.
+
+## [1.2.1] - 2026-04-05
+
+### Fixed
+- Anomaly detector false positives reduced by filtering non-substantive messages
+
 ## [1.2.0] - 2026-04-05
 
 ### Added — Cache Intelligence & Anomaly Detection

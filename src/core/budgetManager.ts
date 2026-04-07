@@ -3,7 +3,7 @@ import isoWeek from "dayjs/plugin/isoWeek.js";
 import { basename } from "node:path";
 import { initDatabase } from "../db/schema.js";
 import { runMigrations } from "../db/migrations.js";
-import { findJsonlFilesSync, parseSessionFile } from "./parser.js";
+import { findJsonlFilesForProject, parseSessionFile } from "./parser.js";
 import { calculateMessageCost } from "./costCalculator.js";
 import type { BudgetStatus } from "../types/config.js";
 import type Database from "better-sqlite3";
@@ -80,14 +80,7 @@ export class BudgetManager {
   }
 
   syncFromJsonl(projectPath: string): number {
-    const projectName = basename(projectPath);
-    const allFiles = findJsonlFilesSync();
-
-    // Filter to files matching this project
-    const encodedPath = projectPath.replace(/\//g, "-");
-    const filesToProcess = allFiles.filter(
-      (f) => f.includes(projectName) || f.includes(encodeURIComponent(projectPath)) || f.includes(encodedPath),
-    );
+    const filesToProcess = findJsonlFilesForProject(projectPath);
     if (filesToProcess.length === 0) return 0;
 
     let synced = 0;

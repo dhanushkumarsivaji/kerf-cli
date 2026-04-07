@@ -6,7 +6,13 @@ import { registerAuditCommand } from "./commands/audit.js";
 import { registerReportCommand } from "./commands/report.js";
 import { registerInitCommand } from "./commands/init.js";
 import { registerImportCommand } from "./commands/import.js";
-import { registerDashboardCommand } from "./commands/dashboard.js";
+import { registerSyncCommand } from "./commands/sync.js";
+import { registerSummaryCommand } from "./commands/summary.js";
+import { registerSessionsCommand } from "./commands/sessions.js";
+import { registerQueryCommand } from "./commands/query.js";
+import { registerEfficiencyCommand } from "./commands/efficiency.js";
+import { registerCacheCommand } from "./commands/cache.js";
+import { registerDoctorCommand } from "./commands/doctor.js";
 
 declare const __KERF_VERSION__: string;
 
@@ -25,7 +31,13 @@ registerAuditCommand(program);
 registerReportCommand(program);
 registerInitCommand(program);
 registerImportCommand(program);
-registerDashboardCommand(program);
+registerSyncCommand(program);
+registerSummaryCommand(program);
+registerSessionsCommand(program);
+registerQueryCommand(program);
+registerEfficiencyCommand(program);
+registerCacheCommand(program);
+registerDoctorCommand(program);
 
 // Default to watch if no command given
 program.action(async () => {

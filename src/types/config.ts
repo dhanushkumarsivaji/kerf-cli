@@ -34,7 +34,9 @@ export interface CostEstimate {
   contextOverhead: number;
   fileTokens: number;
   fileCount: number;
-  percentOfWindow: number;
+  percentOfTypicalWindow: number;
+  actualWindowSpentUsd: number;
+  actualWindowPercentUsed: number;
   recommendations: string[];
   complexitySignals: ComplexitySignals;
   detectedComplexity: string;

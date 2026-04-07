@@ -15,6 +15,7 @@ export function registerInitCommand(program: Command): void {
     .option("--hooks-only", "Only install hooks")
     .option("--no-hooks", "Skip hook installation")
     .option("--force", "Skip confirmation prompts")
+    .option("--enforce-budgets", "Install PreToolUse hook that BLOCKS Claude Code when over budget")
     .action(async (opts) => {
       console.log(chalk.bold.cyan("\n  Welcome to kerf-cli!\n"));
       console.log("  Setting up cost intelligence for Claude Code...\n");
@@ -60,7 +61,7 @@ export function registerInitCommand(program: Command): void {
         console.log(`\n  Hooks will be added to ${opts.global ? "~/.claude" : ".claude"}/settings.json`);
 
         try {
-          const result = installHooks({ global: opts.global, force: opts.force });
+          const result = installHooks({ global: opts.global, force: opts.force, enforceBudgets: opts.enforceBudgets });
           for (const hook of result.installed) {
             console.log(chalk.green(`  Installed ${hook} hook`));
           }

@@ -119,6 +119,38 @@ export function parseSessionFile(filePath: string): ParsedSession {
   };
 }
 
+/**
+ * Encode an absolute project path to Claude Code's directory naming.
+ * Claude Code stores sessions at ~/.claude/projects/<encoded>/ where
+ * the encoded form replaces every "/" with "-".
+ *
+ * Example: /home/user/foo  ->  -home-user-foo
+ *          /                ->  -
+ */
+export function encodeProjectPath(projectPath: string): string {
+  return projectPath.replace(/\//g, "-");
+}
+
+/**
+ * Decode a Claude Code project directory name back into an absolute path.
+ * Inverse of encodeProjectPath.
+ *
+ * Example: -home-user-foo  ->  /home/user/foo
+ */
+export function decodeProjectPath(encoded: string): string {
+  return encoded.replace(/-/g, "/");
+}
+
+/**
+ * Return all JSONL files for a specific project. Returns [] if the project
+ * has no Claude Code session directory.
+ */
+export function findJsonlFilesForProject(projectPath: string): string[] {
+  const encoded = encodeProjectPath(projectPath);
+  const projectDir = join(CLAUDE_PROJECTS_DIR, encoded);
+  return findJsonlFilesSync(projectDir);
+}
+
 export async function findJsonlFiles(baseDir?: string): Promise<string[]> {
   const dir = baseDir ?? CLAUDE_PROJECTS_DIR;
   const files: string[] = [];

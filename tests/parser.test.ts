@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseJsonlContent, parseJsonlLine, parseSessionFile } from "../src/core/parser.js";
+import { parseJsonlContent, parseJsonlLine, parseSessionFile, encodeProjectPath, decodeProjectPath, findJsonlFilesForProject } from "../src/core/parser.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = join(__dirname, "fixtures", "sample-session.jsonl");
@@ -81,5 +81,23 @@ describe("parseSessionFile", () => {
     const session = parseSessionFile(FIXTURE_PATH);
     expect(session.totalCacheReadTokens).toBeGreaterThan(0);
     expect(session.totalCacheCreationTokens).toBeGreaterThan(0);
+  });
+});
+
+describe("project path encoding", () => {
+  it("encodes absolute paths by replacing / with -", () => {
+    expect(encodeProjectPath("/home/user/foo")).toBe("-home-user-foo");
+  });
+
+  it("encodes root as a single dash", () => {
+    expect(encodeProjectPath("/")).toBe("-");
+  });
+
+  it("decode reverses encode", () => {
+    expect(decodeProjectPath(encodeProjectPath("/home/user/foo"))).toBe("/home/user/foo");
+  });
+
+  it("findJsonlFilesForProject returns [] for nonexistent project", () => {
+    expect(findJsonlFilesForProject("/zzz-no-such-project-aaa")).toEqual([]);
   });
 });
