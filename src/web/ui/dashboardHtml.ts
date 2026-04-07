@@ -299,16 +299,14 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       "imports": {
         "react": "https://esm.sh/react@18.3.1",
         "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
-        "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1",
-        "recharts": "https://esm.sh/recharts@2.15.0?deps=react@18.3.1,react-dom@18.3.1&external=react,react-dom"
+        "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1"
       }
     }
   </script>
 
   <script type="module">
-    import React, { useState, useEffect, useMemo } from 'react';
+    import React, { useState, useEffect } from 'react';
     import { createRoot } from 'react-dom/client';
-    import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 
     const e = React.createElement;
 
@@ -346,19 +344,18 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       return m.replace('claude-', '').replace(/-\\d{8}.*/, '');
     };
 
-    function useApi(url) {
+    function useApi(url, refreshKey = 0) {
       const [data, setData] = useState(null);
       const [loading, setLoading] = useState(true);
       const [error, setError] = useState(null);
       useEffect(() => {
         let cancelled = false;
-        setLoading(true);
         fetch(url)
           .then((r) => r.json())
           .then((d) => { if (!cancelled) { setData(d); setLoading(false); } })
           .catch((err) => { if (!cancelled) { setError(err); setLoading(false); } });
         return () => { cancelled = true; };
-      }, [url]);
+      }, [url, refreshKey]);
       return { data, loading, error };
     }
 
@@ -478,39 +475,58 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       );
     }
 
+    function DonutChart({ rate }) {
+      // Simple inline-SVG donut: background ring + foreground arc for the hit rate
+      const size = 60, stroke = 8, r = (size - stroke) / 2, cx = size / 2, cy = size / 2;
+      const circ = 2 * Math.PI * r;
+      const filled = Math.max(0, Math.min(1, rate)) * circ;
+      return e('svg', { width: size, height: size, viewBox: '0 0 ' + size + ' ' + size },
+        e('circle', { cx, cy, r, fill: 'none', stroke: 'var(--color-bg-elevated)', strokeWidth: stroke }),
+        e('circle', {
+          cx, cy, r, fill: 'none',
+          stroke: 'var(--color-success)', strokeWidth: stroke,
+          strokeDasharray: filled + ' ' + (circ - filled),
+          strokeDashoffset: circ / 4,
+          strokeLinecap: 'round',
+          transform: 'rotate(-90 ' + cx + ' ' + cy + ')',
+        })
+      );
+    }
+
     function CacheCard({ cache }) {
       if (!cache) return null;
       const rate = cache.cacheHitRate ?? 0;
-      const data = [
-        { name: 'Cache hits', value: cache.totalCacheReadTokens ?? 0 },
-        { name: 'Fresh', value: cache.totalInputTokens ?? 0 },
-      ];
       const cardClass = 'card' + (rate < 0.5 && rate > 0 ? ' warning' : '');
       return e('div', { className: cardClass },
         e('div', { className: 'card-title' }, 'Cache hit rate'),
         e('div', { className: 'card-big-number' }, fmtPct(rate)),
         e('div', { className: 'card-subtitle' }, 'Tokens served from cache'),
         e('div', { style: { marginTop: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' } },
-          e('div', { style: { flex: '0 0 60px', height: 60 } },
-            e(ResponsiveContainer, null,
-              e(PieChart, null,
-                e(Pie, { data, dataKey: 'value', innerRadius: 18, outerRadius: 28, startAngle: 90, endAngle: -270 },
-                  e(Cell, { fill: 'var(--color-success)' }),
-                  e(Cell, { fill: 'var(--color-bg-elevated)' })
-                )
-              )
-            )
+          e('div', { style: { flex: '0 0 60px' } },
+            e(DonutChart, { rate })
           ),
-          e('div', { style: { flex: 1, fontSize: 11, color: 'var(--color-text-secondary)' } },
-            'Saved ' + fmtCost(cache.savingsFromCache ?? 0),
-            e('br'),
-            'Could save ' + fmtCost(cache.potentialAdditionalSavings ?? 0) + ' more at 80%'
+          e('div', { style: { flex: 1, fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.5 } },
+            e('div', null, 'Saved ', fmtCost(cache.savingsFromCache ?? 0)),
+            e('div', { style: { marginTop: 2 } }, 'Could save ', fmtCost(cache.potentialAdditionalSavings ?? 0), ' more at 80%')
           )
         )
       );
     }
 
-    function CostChart({ costTrend, period }) {
+    // Build an SVG area path from a series of y values scaled to 0-1
+    function buildAreaPath(values, width, height, maxY) {
+      if (values.length === 0) return '';
+      const step = values.length === 1 ? width : width / (values.length - 1);
+      const scaleY = (v) => height - (maxY > 0 ? (v / maxY) * height : 0);
+      let d = 'M 0 ' + scaleY(values[0]);
+      for (let i = 1; i < values.length; i++) {
+        d += ' L ' + (i * step) + ' ' + scaleY(values[i]);
+      }
+      d += ' L ' + width + ' ' + height + ' L 0 ' + height + ' Z';
+      return d;
+    }
+
+    function CostChart({ costTrend }) {
       if (!costTrend || costTrend.length === 0) {
         return e('div', { className: 'empty' },
           e('div', { className: 'empty-icon' }, '∅'),
@@ -518,34 +534,71 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
           e('div', { className: 'empty-body' }, 'Run \`kerf sync\` to ingest your Claude Code sessions, then come back.')
         );
       }
-      return e('div', { style: { width: '100%', height: 280 } },
-        e(ResponsiveContainer, null,
-          e(AreaChart, { data: costTrend, margin: { top: 10, right: 10, left: 0, bottom: 0 } },
-            e('defs', null,
-              e('linearGradient', { id: 'opusGrad', x1: 0, y1: 0, x2: 0, y2: 1 },
-                e('stop', { offset: '5%', stopColor: 'var(--color-model-opus)', stopOpacity: 0.6 }),
-                e('stop', { offset: '95%', stopColor: 'var(--color-model-opus)', stopOpacity: 0 })
-              ),
-              e('linearGradient', { id: 'sonnetGrad', x1: 0, y1: 0, x2: 0, y2: 1 },
-                e('stop', { offset: '5%', stopColor: 'var(--color-model-sonnet)', stopOpacity: 0.6 }),
-                e('stop', { offset: '95%', stopColor: 'var(--color-model-sonnet)', stopOpacity: 0 })
-              ),
-              e('linearGradient', { id: 'haikuGrad', x1: 0, y1: 0, x2: 0, y2: 1 },
-                e('stop', { offset: '5%', stopColor: 'var(--color-model-haiku)', stopOpacity: 0.6 }),
-                e('stop', { offset: '95%', stopColor: 'var(--color-model-haiku)', stopOpacity: 0 })
-              )
-            ),
-            e(CartesianGrid, { strokeDasharray: '3 3', stroke: 'var(--color-border-subtle)' }),
-            e(XAxis, { dataKey: 'bucket', stroke: 'var(--color-text-tertiary)', fontSize: 10, tickFormatter: (v) => v.slice(-5) }),
-            e(YAxis, { stroke: 'var(--color-text-tertiary)', fontSize: 10, tickFormatter: (v) => '$' + v.toFixed(0) }),
-            e(Tooltip, {
-              contentStyle: { background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-default)', borderRadius: 6, fontSize: 12 },
-              formatter: (v) => fmtCost(v),
-            }),
-            e(Area, { type: 'monotone', dataKey: 'opus', stackId: '1', stroke: 'var(--color-model-opus)', fill: 'url(#opusGrad)', strokeWidth: 2 }),
-            e(Area, { type: 'monotone', dataKey: 'sonnet', stackId: '1', stroke: 'var(--color-model-sonnet)', fill: 'url(#sonnetGrad)', strokeWidth: 2 }),
-            e(Area, { type: 'monotone', dataKey: 'haiku', stackId: '1', stroke: 'var(--color-model-haiku)', fill: 'url(#haikuGrad)', strokeWidth: 2 })
+
+      const width = 1000, height = 240, padLeft = 40, padBottom = 24;
+      const chartW = width - padLeft;
+      const chartH = height - padBottom;
+
+      // Build running stacked totals
+      const stacks = costTrend.map((d) => {
+        const opus = d.opus || 0;
+        const sonnet = d.sonnet || 0;
+        const haiku = d.haiku || 0;
+        return { bucket: d.bucket, opus, sonnet, haiku, total: opus + sonnet + haiku };
+      });
+      const maxY = Math.max(0.01, ...stacks.map((s) => s.total));
+
+      // Stacked series cumulative values
+      const opusLine = stacks.map((s) => s.opus);
+      const sonnetLine = stacks.map((s) => s.opus + s.sonnet);
+      const haikuLine = stacks.map((s) => s.opus + s.sonnet + s.haiku);
+
+      // Y axis ticks (5 steps)
+      const yTicks = [];
+      for (let i = 0; i <= 4; i++) {
+        const v = (maxY / 4) * i;
+        yTicks.push({ v, y: chartH - (v / maxY) * chartH });
+      }
+
+      // X axis labels: show up to 6 evenly spaced
+      const xLabels = [];
+      const labelCount = Math.min(6, stacks.length);
+      for (let i = 0; i < labelCount; i++) {
+        const idx = Math.floor((stacks.length - 1) * (i / Math.max(1, labelCount - 1)));
+        xLabels.push({
+          x: stacks.length === 1 ? chartW / 2 : (idx / (stacks.length - 1)) * chartW,
+          label: (stacks[idx]?.bucket ?? '').slice(-5),
+        });
+      }
+
+      return e('div', { style: { width: '100%', overflowX: 'auto' } },
+        e('svg', { viewBox: '0 0 ' + width + ' ' + height, width: '100%', style: { display: 'block', maxHeight: 280 } },
+          e('g', { transform: 'translate(' + padLeft + ',0)' },
+            // Y gridlines + labels
+            yTicks.map((t, i) => e('g', { key: 'yt' + i },
+              e('line', { x1: 0, y1: t.y, x2: chartW, y2: t.y, stroke: 'var(--color-border-subtle)', strokeDasharray: '2 4' }),
+              e('text', { x: -8, y: t.y + 4, textAnchor: 'end', fill: 'var(--color-text-tertiary)', fontSize: 10 }, '$' + t.v.toFixed(t.v < 10 ? 1 : 0))
+            )),
+            // Haiku on bottom of stack order painted first (largest area)
+            e('path', { d: buildAreaPath(haikuLine, chartW, chartH, maxY), fill: 'var(--color-model-haiku)', fillOpacity: 0.5, stroke: 'var(--color-model-haiku)', strokeWidth: 1.5 }),
+            e('path', { d: buildAreaPath(sonnetLine, chartW, chartH, maxY), fill: 'var(--color-model-sonnet)', fillOpacity: 0.6, stroke: 'var(--color-model-sonnet)', strokeWidth: 1.5 }),
+            e('path', { d: buildAreaPath(opusLine, chartW, chartH, maxY), fill: 'var(--color-model-opus)', fillOpacity: 0.7, stroke: 'var(--color-model-opus)', strokeWidth: 1.5 }),
+            // X labels
+            xLabels.map((xl, i) => e('text', {
+              key: 'xl' + i,
+              x: xl.x,
+              y: chartH + 16,
+              textAnchor: 'middle',
+              fill: 'var(--color-text-tertiary)',
+              fontSize: 10,
+            }, xl.label))
           )
+        ),
+        // Legend
+        e('div', { style: { display: 'flex', justifyContent: 'center', gap: 16, marginTop: 12, fontSize: 11, color: 'var(--color-text-secondary)' } },
+          e('div', null, e('span', { style: { display: 'inline-block', width: 10, height: 10, background: 'var(--color-model-opus)', borderRadius: 2, marginRight: 6 } }), 'Opus'),
+          e('div', null, e('span', { style: { display: 'inline-block', width: 10, height: 10, background: 'var(--color-model-sonnet)', borderRadius: 2, marginRight: 6 } }), 'Sonnet'),
+          e('div', null, e('span', { style: { display: 'inline-block', width: 10, height: 10, background: 'var(--color-model-haiku)', borderRadius: 2, marginRight: 6 } }), 'Haiku')
         )
       );
     }
@@ -609,17 +662,18 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
     function App() {
       const [period, setPeriod] = useState('today');
-      const reportApi = useApi('/api/report?period=' + period);
-      const trendApi = useApi('/api/cost-trend?period=' + period);
-      const sessionsApi = useApi('/api/sessions?limit=20&sort=recent&order=desc');
-      const budgetApi = useApi('/api/budget');
+      const [refreshKey, setRefreshKey] = useState(0);
 
       // Auto-refresh every 5 seconds
-      const [, setTick] = useState(0);
       useEffect(() => {
-        const t = setInterval(() => setTick((x) => x + 1), 5000);
+        const t = setInterval(() => setRefreshKey((k) => k + 1), 5000);
         return () => clearInterval(t);
       }, []);
+
+      const reportApi = useApi('/api/report?period=' + period, refreshKey);
+      const trendApi = useApi('/api/cost-trend?period=' + period, refreshKey);
+      const sessionsApi = useApi('/api/sessions?limit=20&sort=recent&order=desc', refreshKey);
+      const budgetApi = useApi('/api/budget', refreshKey);
 
       const report = reportApi.data;
       const sessions = sessionsApi.data?.sessions ?? [];
