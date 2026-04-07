@@ -9,6 +9,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node 20+](https://img.shields.io/badge/node-20%2B-green.svg)]()
 
+![kerf dashboard](docs/assets/dashboard-preview.png)
+
 Kerf reads your Claude Code sessions into a local SQLite database you can query with SQL. It surfaces wasted Opus spend, tracks cache hit rate, enforces budgets via Claude Code hooks, and ships a polished local web dashboard.
 
 **100% local. No API keys. No telemetry. No cloud.**
