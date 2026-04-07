@@ -75,10 +75,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
     /* Hero header */
     .hero {
-      position: sticky; top: 0; z-index: 10;
-      background: rgba(8, 9, 10, 0.85);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: var(--color-bg-base);
       border-bottom: 1px solid var(--color-border-subtle);
       margin: calc(-1 * var(--space-6)) calc(-1 * var(--space-6)) var(--space-6);
       padding: var(--space-6);
@@ -115,6 +112,14 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       box-shadow: 0 1px 2px rgba(0,0,0,0.4);
     }
 
+    .hero-metrics-period {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-text-tertiary);
+      margin-bottom: var(--space-3);
+    }
     .hero-metrics {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-6);
     }
@@ -141,7 +146,8 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
     /* Killer features grid */
     .killer-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4);
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-5);
+      margin-top: var(--space-2);
       margin-bottom: var(--space-6);
     }
     @media (max-width: 900px) { .killer-grid { grid-template-columns: 1fr; } }
@@ -434,8 +440,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       if (m < 60) return m + 'm ' + (s % 60) + 's';
       const h = Math.floor(m / 60);
       if (h < 24) return h + 'h ' + (m % 60) + 'm';
-      const days = Math.floor(h / 24);
-      return days + 'd ' + (h % 24) + 'h';
+      return '1d+';
     };
     const modelClass = (m) => {
       if (!m) return 'other';
@@ -481,7 +486,11 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     function Hero({ period, setPeriod, report }) {
       const cost = report?.totalCost ?? 0;
       const sessions = report?.totalSessions ?? 0;
-      const tokens = (report?.totalInputTokens ?? 0) + (report?.totalOutputTokens ?? 0) + (report?.totalCacheRead ?? 0);
+      const tokens =
+        (report?.totalInputTokens ?? 0) +
+        (report?.totalOutputTokens ?? 0) +
+        (report?.totalCacheRead ?? 0) +
+        (report?.totalCacheCreation ?? 0);
       const cacheRate = report?.cacheHitRate ?? 0;
       const trend = report?.costTrend ?? { percentChange: 0 };
       const change = trend.percentChange;
@@ -505,6 +514,12 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
             e(PeriodPicker, { period, setPeriod })
           )
         ),
+        e('div', { className: 'hero-metrics-period' },
+          period === 'today' ? 'TODAY' :
+          period === 'week' ? 'LAST 7 DAYS' :
+          period === 'month' ? 'LAST 30 DAYS' :
+          'ALL TIME'
+        ),
         e('div', { className: 'hero-metrics' },
           e('div', { className: 'metric' },
             e('div', null,
@@ -513,7 +528,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
                 changeIcon + ' ' + Math.abs(change).toFixed(0) + '%'
               ) : null
             ),
-            e('div', { className: 'metric-label' }, 'Spent ' + period)
+            e('div', { className: 'metric-label' }, 'Spent')
           ),
           e('div', { className: 'metric' },
             e('div', { className: 'metric-value' }, sessions.toLocaleString()),
@@ -619,17 +634,32 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       );
     }
 
-    // Build an SVG area path from a series of y values scaled to 0-1
-    function buildAreaPath(values, width, height, maxY) {
-      if (values.length === 0) return '';
-      const step = values.length === 1 ? width : width / (values.length - 1);
-      const scaleY = (v) => height - (maxY > 0 ? (v / maxY) * height : 0);
-      let d = 'M 0 ' + scaleY(values[0]);
-      for (let i = 1; i < values.length; i++) {
-        d += ' L ' + (i * step) + ' ' + scaleY(values[i]);
+    // Build an SVG band path between two cumulative y-value series.
+    // upperYs and lowerYs are arrays of pre-scaled y coordinates.
+    function buildBandPath(upperYs, lowerYs, width) {
+      if (upperYs.length === 0) return '';
+      const step = upperYs.length === 1 ? width : width / (upperYs.length - 1);
+      let d = 'M 0 ' + upperYs[0];
+      for (let i = 1; i < upperYs.length; i++) {
+        d += ' L ' + (i * step) + ' ' + upperYs[i];
       }
-      d += ' L ' + width + ' ' + height + ' L 0 ' + height + ' Z';
+      for (let i = lowerYs.length - 1; i >= 0; i--) {
+        d += ' L ' + (i * step) + ' ' + lowerYs[i];
+      }
+      d += ' Z';
       return d;
+    }
+
+    // Generate "nice" round axis ticks (1, 2, 2.5, 5, 10 family) for a given max value
+    function niceTicks(maxValue, targetCount) {
+      if (maxValue <= 0) return [0];
+      const rough = maxValue / Math.max(1, targetCount - 1);
+      const magnitude = Math.pow(10, Math.floor(Math.log10(rough)));
+      const candidates = [1, 2, 2.5, 5, 10].map((c) => c * magnitude);
+      const step = candidates.find((c) => c >= rough) || rough;
+      const ticks = [];
+      for (let v = 0; v <= maxValue + step * 0.5; v += step) ticks.push(v);
+      return ticks;
     }
 
     function CostChart({ costTrend }) {
@@ -652,19 +682,20 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
         const haiku = d.haiku || 0;
         return { bucket: d.bucket, opus, sonnet, haiku, total: opus + sonnet + haiku };
       });
-      const maxY = Math.max(0.01, ...stacks.map((s) => s.total));
 
-      // Stacked series cumulative values
-      const opusLine = stacks.map((s) => s.opus);
-      const sonnetLine = stacks.map((s) => s.opus + s.sonnet);
-      const haikuLine = stacks.map((s) => s.opus + s.sonnet + s.haiku);
+      // Compute nice ticks first; chart scales to the top tick (not raw max)
+      const rawMax = Math.max(0.01, ...stacks.map((s) => s.total));
+      const tickValues = niceTicks(rawMax, 5);
+      const adjustedMaxY = tickValues[tickValues.length - 1];
+      const scaleY = (v) => chartH - (adjustedMaxY > 0 ? (v / adjustedMaxY) * chartH : 0);
 
-      // Y axis ticks (5 steps)
-      const yTicks = [];
-      for (let i = 0; i <= 4; i++) {
-        const v = (maxY / 4) * i;
-        yTicks.push({ v, y: chartH - (v / maxY) * chartH });
-      }
+      const yTicks = tickValues.map((v) => ({ v, y: scaleY(v) }));
+
+      // Pre-scaled cumulative y-coordinate series for stacked bands
+      const zeroY = stacks.map(() => chartH);
+      const opusY = stacks.map((s) => scaleY(s.opus));
+      const sonnetY = stacks.map((s) => scaleY(s.opus + s.sonnet));
+      const haikuY = stacks.map((s) => scaleY(s.opus + s.sonnet + s.haiku));
 
       // X axis labels: show up to 6 evenly spaced
       const xLabels = [];
@@ -677,18 +708,36 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
         });
       }
 
+      const fmtTick = (v) =>
+        v >= 100 ? '$' + Math.round(v) :
+        v >= 10 ? '$' + v.toFixed(0) :
+        v >= 1 ? '$' + v.toFixed(0) :
+        '$' + v.toFixed(2);
+
       return e('div', { style: { width: '100%', overflowX: 'auto' } },
         e('svg', { viewBox: '0 0 ' + width + ' ' + height, width: '100%', style: { display: 'block', maxHeight: 280 } },
           e('g', { transform: 'translate(' + padLeft + ',0)' },
-            // Y gridlines + labels
+            // Y gridlines + labels (rounded ticks)
             yTicks.map((t, i) => e('g', { key: 'yt' + i },
               e('line', { x1: 0, y1: t.y, x2: chartW, y2: t.y, stroke: 'var(--color-border-subtle)', strokeDasharray: '2 4' }),
-              e('text', { x: -8, y: t.y + 4, textAnchor: 'end', fill: 'var(--color-text-tertiary)', fontSize: 10 }, '$' + t.v.toFixed(t.v < 10 ? 1 : 0))
+              e('text', { x: -8, y: t.y + 4, textAnchor: 'end', fill: 'var(--color-text-tertiary)', fontSize: 10 }, fmtTick(t.v))
             )),
-            // Haiku on bottom of stack order painted first (largest area)
-            e('path', { d: buildAreaPath(haikuLine, chartW, chartH, maxY), fill: 'var(--color-model-haiku)', fillOpacity: 0.5, stroke: 'var(--color-model-haiku)', strokeWidth: 1.5 }),
-            e('path', { d: buildAreaPath(sonnetLine, chartW, chartH, maxY), fill: 'var(--color-model-sonnet)', fillOpacity: 0.6, stroke: 'var(--color-model-sonnet)', strokeWidth: 1.5 }),
-            e('path', { d: buildAreaPath(opusLine, chartW, chartH, maxY), fill: 'var(--color-model-opus)', fillOpacity: 0.7, stroke: 'var(--color-model-opus)', strokeWidth: 1.5 }),
+            // Stacked bands: opus on bottom, sonnet on top of opus, haiku on top of sonnet
+            e('path', {
+              d: buildBandPath(opusY, zeroY, chartW),
+              fill: 'var(--color-model-opus)', fillOpacity: 0.85,
+              stroke: 'var(--color-model-opus)', strokeWidth: 1.5,
+            }),
+            e('path', {
+              d: buildBandPath(sonnetY, opusY, chartW),
+              fill: 'var(--color-model-sonnet)', fillOpacity: 0.85,
+              stroke: 'var(--color-model-sonnet)', strokeWidth: 1.5,
+            }),
+            e('path', {
+              d: buildBandPath(haikuY, sonnetY, chartW),
+              fill: 'var(--color-model-haiku)', fillOpacity: 0.85,
+              stroke: 'var(--color-model-haiku)', strokeWidth: 1.5,
+            }),
             // X labels
             xLabels.map((xl, i) => e('text', {
               key: 'xl' + i,
@@ -793,7 +842,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
             ),
             e('tbody', null,
               sessions.map((s) => {
-                const tokens = s.totalInputTokens + s.totalOutputTokens + s.totalCacheRead;
+                const tokens = s.totalInputTokens + s.totalOutputTokens + s.totalCacheRead + s.totalCacheCreation;
                 return e(React.Fragment, { key: s.sessionId },
                   e('tr', {
                     onClick: () => setExpanded(expanded === s.sessionId ? null : s.sessionId),

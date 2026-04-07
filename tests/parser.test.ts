@@ -50,6 +50,18 @@ describe("parseJsonlContent", () => {
     expect(messages[0].totalCostUsd).toBe(0.05);
   });
 
+  it("merges duplicate message IDs by taking max per field, not last value", () => {
+    const content = [
+      '{"type":"message","message":{"id":"msg_1","model":"claude-sonnet-4-20250514","usage":{"input_tokens":1234,"output_tokens":0,"cache_read_input_tokens":5000}}}',
+      '{"type":"message","message":{"id":"msg_1","model":"claude-sonnet-4-20250514","usage":{"input_tokens":0,"output_tokens":567,"cache_read_input_tokens":5000}}}',
+    ].join("\n");
+    const messages = parseJsonlContent(content, "test-session");
+    expect(messages).toHaveLength(1);
+    expect(messages[0].usage.input_tokens).toBe(1234);
+    expect(messages[0].usage.output_tokens).toBe(567);
+    expect(messages[0].usage.cache_read_input_tokens).toBe(5000);
+  });
+
   it("handles streaming intermediate values (output_tokens: 1)", () => {
     const content = [
       '{"type":"message","message":{"id":"msg_1","model":"claude-sonnet-4-20250514","usage":{"input_tokens":5000,"output_tokens":1}}}',

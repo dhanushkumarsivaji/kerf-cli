@@ -61,7 +61,7 @@ export function computeCacheStats(
   const totalCacheReadTokens = row.cache_read ?? 0;
   const totalCacheCreationTokens = row.cache_creation ?? 0;
 
-  const totalCacheable = totalInputTokens + totalCacheReadTokens;
+  const totalCacheable = totalInputTokens + totalCacheReadTokens + totalCacheCreationTokens;
   const cacheHitRate = totalCacheable > 0 ? totalCacheReadTokens / totalCacheable : 0;
 
   const pricing = resolveModelPricing("sonnet");
@@ -97,7 +97,7 @@ export function detectPoorCacheSessions(
     .prepare(
       `SELECT
         session_id, project_path, total_cost_usd,
-        total_input_tokens + total_cache_read as total_cacheable,
+        total_input_tokens + total_cache_read + total_cache_creation as total_cacheable,
         total_cache_read
        FROM sessions_meta
        WHERE total_cost_usd > 1.0

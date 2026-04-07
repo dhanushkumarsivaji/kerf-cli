@@ -92,8 +92,12 @@ function buildReport(db: Database.Database, period: string): unknown {
   const previous = prior.total_cost ?? 0;
   const percentChange = previous > 0 ? ((current - previous) / previous) * 100 : 0;
 
-  const cacheable = (row.total_input ?? 0) + (row.total_cache_read ?? 0);
-  const cacheHitRate = cacheable > 0 ? (row.total_cache_read ?? 0) / cacheable : 0;
+  const totalReadable =
+    (row.total_input ?? 0) +
+    (row.total_cache_read ?? 0) +
+    (row.total_cache_creation ?? 0);
+  const cacheHitRate =
+    totalReadable > 0 ? (row.total_cache_read ?? 0) / totalReadable : 0;
 
   const topProjects = db
     .prepare(

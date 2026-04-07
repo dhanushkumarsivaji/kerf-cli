@@ -63,16 +63,21 @@ export function parseJsonlContent(content: string, sessionId: string): ParsedMes
     const timestamp = extractTimestamp(raw);
 
     const existing = messageMap.get(id);
+    // Streaming JSONL emits partial usage updates per chunk; take MAX per field
+    // so we never lose tokens that appeared in an earlier chunk.
     const parsedUsage: MessageUsage = {
-      input_tokens: usage.input_tokens ?? existing?.usage.input_tokens ?? 0,
-      output_tokens: usage.output_tokens ?? existing?.usage.output_tokens ?? 0,
-      cache_creation_input_tokens:
-        usage.cache_creation_input_tokens ?? existing?.usage.cache_creation_input_tokens ?? 0,
-      cache_read_input_tokens:
-        usage.cache_read_input_tokens ?? existing?.usage.cache_read_input_tokens ?? 0,
+      input_tokens: Math.max(usage.input_tokens ?? 0, existing?.usage.input_tokens ?? 0),
+      output_tokens: Math.max(usage.output_tokens ?? 0, existing?.usage.output_tokens ?? 0),
+      cache_creation_input_tokens: Math.max(
+        usage.cache_creation_input_tokens ?? 0,
+        existing?.usage.cache_creation_input_tokens ?? 0,
+      ),
+      cache_read_input_tokens: Math.max(
+        usage.cache_read_input_tokens ?? 0,
+        existing?.usage.cache_read_input_tokens ?? 0,
+      ),
     };
 
-    // Deduplicate by message id — take the LAST occurrence (handles streaming intermediates)
     messageMap.set(id, {
       id,
       sessionId,
@@ -247,6 +252,8 @@ export function createStreamingParser(filePath: string): StreamingParser {
   const sessionId = basename(filePath, ".jsonl");
   let anonymousCounter = 0;
   let lastReadPosition = 0;
+  // Track per-id usage so we MAX-merge across streaming chunks (matches parseJsonlContent)
+  const usageState = new Map<string, MessageUsage>();
 
   // Set initial position to end of file
   try {
@@ -286,17 +293,27 @@ export function createStreamingParser(filePath: string): StreamingParser {
         const model = extractModel(raw) ?? "unknown";
         const timestamp = extractTimestamp(raw);
 
+        const prev = usageState.get(id);
+        const mergedUsage: MessageUsage = {
+          input_tokens: Math.max(usage.input_tokens ?? 0, prev?.input_tokens ?? 0),
+          output_tokens: Math.max(usage.output_tokens ?? 0, prev?.output_tokens ?? 0),
+          cache_creation_input_tokens: Math.max(
+            usage.cache_creation_input_tokens ?? 0,
+            prev?.cache_creation_input_tokens ?? 0,
+          ),
+          cache_read_input_tokens: Math.max(
+            usage.cache_read_input_tokens ?? 0,
+            prev?.cache_read_input_tokens ?? 0,
+          ),
+        };
+        usageState.set(id, mergedUsage);
+
         const msg: ParsedMessage = {
           id,
           sessionId,
           model,
           timestamp,
-          usage: {
-            input_tokens: usage.input_tokens ?? 0,
-            output_tokens: usage.output_tokens ?? 0,
-            cache_creation_input_tokens: usage.cache_creation_input_tokens ?? 0,
-            cache_read_input_tokens: usage.cache_read_input_tokens ?? 0,
-          },
+          usage: mergedUsage,
           totalCostUsd: raw.total_cost_usd ?? null,
         };
 
