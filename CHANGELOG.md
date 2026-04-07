@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-04-07
+
+### Added — Polished Web Dashboard
+- **`kerf dashboard`** is back, now SQLite-backed and Linear-grade
+- Hero header with sticky position, 4 big metrics, live indicator, period picker
+- Killer-features grid: Budget status, Model Efficiency savings, Cache hit rate
+- Stacked area cost-over-time chart broken down by model (Opus/Sonnet/Haiku)
+- Sortable session table with click-to-expand drill-down
+- Welcome empty state with one-click sync
+- Design system: Linear-inspired dark theme, 4px spacing grid, model color coding
+- API endpoints: /api/report, /api/cost-trend, /api/sessions, /api/efficiency, /api/cache, /api/budget, /api/sync
+- 5-second in-process query cache for fast polling
+- Sub-100ms API response times via SQLite analytics layer
+- Background ingest on dashboard startup
+
+### Architecture
+- Modular file structure: src/web/{server,routes/api,routes/static,ui/dashboardHtml}
+- Single-file React SPA via importmap (no build step) — embedded as TS string
+
 ## [2.0.0] - 2026-04-07
 
 The analytics rewrite. Kerf is now SQLite-backed: ingest your Claude Code sessions

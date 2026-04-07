@@ -43,6 +43,27 @@ kerf budget set 50 --period weekly && kerf init --enforce-budgets
 
 ---
 
+## The dashboard
+
+```bash
+kerf dashboard
+```
+
+Opens a polished local web UI at `http://localhost:3847` with:
+- Hero metrics (cost, sessions, tokens, cache hit rate) with trend arrows
+- **Budget status** card with progress bar and remaining time
+- **Model efficiency** card showing potential Opus → Sonnet savings
+- **Cache hit rate** card with donut chart and savings number
+- Stacked area chart of cost over time, broken down by model
+- Sortable session table with click-to-expand details
+- Period picker (today / week / month / all)
+- Live indicator and auto-refresh
+- Fully local — your data never leaves your machine
+
+The dashboard queries the SQLite analytics database, so it loads in milliseconds even with thousands of sessions.
+
+---
+
 ## Why kerf?
 
 ccusage is a great quick reporter. Kerf is what you reach for when you need:
@@ -86,7 +107,8 @@ Kerf parses `~/.claude/projects/*.jsonl` once into SQLite, then runs analytics i
 ### Live Monitoring
 | Command | Description |
 |---------|-------------|
-| `kerf watch` | Real-time cost dashboard for active session |
+| `kerf watch` | Real-time cost dashboard in your terminal |
+| `kerf dashboard` | Polished web dashboard at http://localhost:3847 |
 | `kerf estimate <task>` | Pre-flight cost estimation |
 | `kerf estimate --compare <task>` | Compare Sonnet vs Opus vs Haiku |
 

@@ -13,6 +13,7 @@ import { registerQueryCommand } from "./commands/query.js";
 import { registerEfficiencyCommand } from "./commands/efficiency.js";
 import { registerCacheCommand } from "./commands/cache.js";
 import { registerDoctorCommand } from "./commands/doctor.js";
+import { registerDashboardCommand } from "./commands/dashboard.js";
 
 declare const __KERF_VERSION__: string;
 
@@ -38,6 +39,7 @@ registerQueryCommand(program);
 registerEfficiencyCommand(program);
 registerCacheCommand(program);
 registerDoctorCommand(program);
+registerDashboardCommand(program);
 
 // Default to watch if no command given
 program.action(async () => {
