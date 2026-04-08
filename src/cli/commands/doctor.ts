@@ -155,7 +155,7 @@ function runChecks(): Check[] {
           name: "kerf hooks registered in Claude settings",
           status: "warn",
           message: "no kerf hooks found",
-          fix: "kerf init --install-hooks",
+          fix: "kerf init",
         });
       }
     } catch (err) {
@@ -171,7 +171,7 @@ function runChecks(): Check[] {
       name: "kerf hooks registered in Claude settings",
       status: "warn",
       message: `${CLAUDE_SETTINGS_GLOBAL} not found`,
-      fix: "kerf init --install-hooks",
+      fix: "kerf init",
     });
   }
 
@@ -190,7 +190,7 @@ function runChecks(): Check[] {
           name: "kerf hook scripts installed",
           status: "warn",
           message: "directory empty",
-          fix: "kerf init --install-hooks",
+          fix: "kerf init",
         });
       }
     } catch {
@@ -198,7 +198,7 @@ function runChecks(): Check[] {
         name: "kerf hook scripts installed",
         status: "warn",
         message: "could not read hooks directory",
-        fix: "kerf init --install-hooks",
+        fix: "kerf init",
       });
     }
   } else {
@@ -206,7 +206,7 @@ function runChecks(): Check[] {
       name: "kerf hook scripts installed",
       status: "warn",
       message: `${KERF_HOOKS_DIR} not found`,
-      fix: "kerf init --install-hooks",
+      fix: "kerf init",
     });
   }
 
@@ -307,7 +307,7 @@ function runChecks(): Check[] {
           name: "Budgets configured",
           status: "warn",
           message: "no budgets set",
-          fix: "kerf budget set --amount <USD> --period monthly",
+          fix: "kerf budget set <amount> --period weekly",
         });
       } else {
         checks.push({
