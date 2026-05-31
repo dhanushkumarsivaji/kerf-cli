@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-05-31
+
+### Added — Multi-tool support: Codex CLI 🎉
+- **kerf now tracks Codex CLI usage alongside Claude Code.** It auto-discovers
+  Codex rollout files at `~/.codex/sessions/**/rollout-*.jsonl` (honoring
+  `CODEX_HOME`, including comma-separated roots) and ingests them into the same
+  analytics database, tagged `tool='codex'`.
+- `CodexAdapter` parses Codex's real rollout schema (verified against
+  `cli_version` 0.117.x): per-call usage from `token_count` events'
+  `last_token_usage`, model from `turn_context`, project path from
+  `session_meta` cwd. Codex's prompt-inclusive `input_tokens` is split into
+  uncached input + `cache_read`, and verbatim-duplicate `token_count` events are
+  de-duplicated so per-message totals match Codex's own reported session total.
+- OpenAI/Codex pricing added (`gpt-5`, `gpt-5-codex`, `gpt-5-mini`, `o4-mini`;
+  `gpt-5.x` resolves via prefix). **Verify current rates before each release.**
+- `kerf sync --tool <id>` syncs a single tool; sync output now reports per-tool counts.
+
+### Known limitations
+- Codex `service_tier` (priority/fast) pricing multipliers are not yet applied —
+  standard pricing is used. Planned for a later release.
+
 ## [2.5.0] - 2026-05-31
 
 ### Changed — Pluggable adapter architecture (foundation for multi-tool support)

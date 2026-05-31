@@ -1,10 +1,11 @@
 import { ClaudeCodeAdapter } from "./claudeCode.js";
+import { CodexAdapter } from "./codex.js";
 import type { IngestAdapter, ToolId } from "./types.js";
 
 /** All known adapters. Add new tools here. */
 const ALL_ADAPTERS: IngestAdapter[] = [
   new ClaudeCodeAdapter(),
-  // CodexAdapter added in Phase B
+  new CodexAdapter(),
   // OtelAdapter / ExternalAdapter added in Phase C
 ];
 

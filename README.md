@@ -1,6 +1,6 @@
 # kerf-cli
 
-**The missing cost intelligence layer for Claude Code.**
+**The missing cost intelligence layer for your AI coding agents.**
 
 > *kerf (n.) — the width of material removed by a cutting tool. Every token operation has a kerf.*
 
@@ -13,9 +13,18 @@
 
 > Real screenshot from my own machine — `$178.04 spent in the last 7 days, 25 sessions, 98% cache hit rate, 37% of weekly budget used, $141/mo Opus → Sonnet savings`. Your numbers will look different.
 
-Kerf reads your Claude Code sessions into a local SQLite database you can query with SQL. It surfaces wasted Opus spend, tracks cache hit rate, enforces budgets via Claude Code hooks, and ships a polished local web dashboard.
+Kerf reads your AI coding agent sessions into a local SQLite database you can query with SQL. It surfaces wasted Opus spend, tracks cache hit rate, enforces budgets via Claude Code hooks, and ships a polished local web dashboard.
 
 **100% local. No API keys. No telemetry. No cloud.**
+
+### Supported tools
+
+| Tool | Status | Data source |
+|------|--------|-------------|
+| **Claude Code** | ✅ Full support | `~/.claude/projects/**/*.jsonl` |
+| **Codex CLI** (incl. Codex Desktop) | ✅ Full support | `~/.codex/sessions/**/rollout-*.jsonl` (set `CODEX_HOME` to override) |
+
+`kerf sync` auto-detects every supported tool installed on your machine and ingests them together. Filter to one with `kerf sync --tool codex`. All read commands accept `--tool <id>` to scope results to a single tool.
 
 ---
 

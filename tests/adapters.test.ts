@@ -79,10 +79,11 @@ describe("registry", () => {
     expect(getAdapters()).toHaveLength(0);
   });
 
-  it("getAdapters(filter) returns empty when the filtered tool is unavailable", () => {
+  it("getAdapters(filter) returns empty when the filtered tool is not registered", () => {
     vi.mocked(existsSync).mockReturnValue(true);
-    // Codex is not registered/available in Phase A → filtering to it yields nothing.
-    expect(getAdapters(["codex"])).toHaveLength(0);
+    // Gemini has no adapter yet → filtering to it yields nothing even when
+    // other tools' data dirs exist.
+    expect(getAdapters(["gemini"])).toHaveLength(0);
   });
 
   it("getAllAdapterIds() lists known adapters regardless of availability", () => {

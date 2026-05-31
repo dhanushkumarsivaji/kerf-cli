@@ -33,6 +33,13 @@ export const MODEL_PRICING: PricingConfig = {
     cacheRead: 0.08,
     cacheCreation: 1.0,
   },
+  // OpenAI / Codex models — per-million-token USD rates.
+  // VERIFY CURRENT RATES at platform.openai.com/pricing before each release.
+  // OpenAI has no separate cache-creation charge; cacheCreation mirrors input.
+  "gpt-5-codex": { input: 1.25, output: 10, cacheRead: 0.125, cacheCreation: 1.25 },
+  "gpt-5-mini": { input: 0.25, output: 2, cacheRead: 0.025, cacheCreation: 0.25 },
+  "gpt-5": { input: 1.25, output: 10, cacheRead: 0.125, cacheCreation: 1.25 },
+  "o4-mini": { input: 1.1, output: 4.4, cacheRead: 0.275, cacheCreation: 1.1 },
 };
 
 // Alias mappings for short model names
