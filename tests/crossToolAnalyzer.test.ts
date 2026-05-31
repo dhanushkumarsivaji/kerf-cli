@@ -90,7 +90,7 @@ describe("analyzeCrossTool", () => {
     expect(cache!.estimatedMonthlySavings).toBeGreaterThan(0);
   });
 
-  it("does not emit tool_consolidation without a tool column (single-tool install)", () => {
+  it("does not emit tool_consolidation for a single-tool install", () => {
     insertMessage(db, {
       session: "s1",
       model: "claude-opus-4-20250514",
@@ -102,9 +102,7 @@ describe("analyzeCrossTool", () => {
   });
 
   it("emits tool_consolidation when multi-tool data is present", () => {
-    // Simulate a future multi-tool schema by adding the tool column.
-    db.exec(`ALTER TABLE messages ADD COLUMN tool TEXT`);
-
+    // The `tool` column now ships in migration v4; seed rows across two tools.
     const insertWithTool = (session: string, tool: string, cost: number) => {
       db.prepare(
         `INSERT INTO messages

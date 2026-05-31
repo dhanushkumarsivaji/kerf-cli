@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-05-31
+
+### Changed — Pluggable adapter architecture (foundation for multi-tool support)
+- Introduced an `IngestAdapter` interface (`src/adapters/`) that wraps each tool's
+  session discovery + parsing behind a common contract. The existing Claude Code
+  logic now lives in `ClaudeCodeAdapter`; `IngestService` is fully adapter-driven.
+- Added an adapter registry (`getAdapters`, `getAllAdapterIds`, `getAdapterById`).
+- `kerf sync` now reports results per tool and accepts `--tool <id>` to sync one tool.
+
+### Database
+- Migration v4 adds a `tool` column to `messages` and `sessions_meta` (default
+  `'claude-code'`, so existing rows backfill automatically — **no re-sync required**),
+  a `tool_breakdown` column to `daily_summaries`, and supporting indexes.
+
+### Notes
+- No user-facing behavior change for existing Claude Code users. This is the
+  foundation that lets later versions ingest other AI coding agents.
+
 ## [2.3.0] - 2026-05-31
 
 ### Added — Intelligence & Alerts (Phase D)

@@ -1,12 +1,7 @@
-import { statSync } from "node:fs";
-import { dirname, basename } from "node:path";
 import type Database from "better-sqlite3";
-import {
-  parseSessionFile,
-  findJsonlFiles,
-  decodeProjectPath,
-} from "./parser.js";
 import { calculateMessageCost } from "./costCalculator.js";
+import { getAdapters } from "../adapters/registry.js";
+import type { IngestAdapter, AdapterSessionFile, ToolId } from "../adapters/types.js";
 
 export interface IngestStats {
   filesProcessed: number;
@@ -20,9 +15,11 @@ export interface FileIngestResult {
 }
 
 /**
- * IngestService — parses Claude Code JSONL session files and writes them
- * into the kerf SQLite analytics tables. Tracks file size + mtime so it
- * only processes files that have changed since the last sync.
+ * IngestService — drives a set of adapters (Claude Code, Codex, …) to parse
+ * their session files and writes them into the kerf SQLite analytics tables.
+ * Tracks file size + mtime so it only processes files that changed since the
+ * last sync. Adapters produce the normalized ParsedSession shape; this service
+ * is tool-agnostic and stamps each row with the adapter's tool id.
  */
 export class IngestService {
   private insertMessage: Database.Statement;
@@ -38,16 +35,16 @@ export class IngestService {
       INSERT OR IGNORE INTO messages (
         message_id, session_id, project_path, model, timestamp,
         input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-        cost_usd, source_file
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        cost_usd, source_file, tool
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     this.upsertSessionMeta = db.prepare(`
       INSERT INTO sessions_meta (
         session_id, project_path, first_message_at, last_message_at,
         message_count, total_input_tokens, total_output_tokens,
-        total_cache_read, total_cache_creation, total_cost_usd, models, last_synced_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        total_cache_read, total_cache_creation, total_cost_usd, models, tool, last_synced_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(session_id) DO UPDATE SET
         project_path = excluded.project_path,
         first_message_at = excluded.first_message_at,
@@ -59,6 +56,7 @@ export class IngestService {
         total_cache_creation = excluded.total_cache_creation,
         total_cost_usd = excluded.total_cost_usd,
         models = excluded.models,
+        tool = excluded.tool,
         last_synced_at = datetime('now')
     `);
 
@@ -87,7 +85,8 @@ export class IngestService {
         SUM(cache_creation_tokens) as total_cache_creation,
         SUM(cost_usd) as total_cost_usd,
         json_group_array(DISTINCT model) as models,
-        project_path
+        project_path,
+        tool
       FROM messages
       WHERE session_id = ?
       GROUP BY session_id
@@ -99,53 +98,42 @@ export class IngestService {
       INSERT INTO daily_summaries (
         date, total_cost_usd, total_input_tokens, total_output_tokens,
         total_cache_read, total_cache_creation, message_count, session_count,
-        model_breakdown, project_breakdown
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        model_breakdown, project_breakdown, tool_breakdown
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
   }
 
   /**
-   * Ingest a single JSONL file. Idempotent — if size+mtime are unchanged
-   * since the last ingest, returns immediately.
+   * Ingest a single session file via its adapter. Idempotent — if size+mtime
+   * are unchanged since the last ingest, returns immediately.
    */
-  ingestFile(filePath: string): FileIngestResult {
-    let stat;
-    try {
-      stat = statSync(filePath);
-    } catch {
-      return { newMessages: 0, skipped: true };
-    }
-
-    const lastModified = stat.mtime.toISOString();
+  ingestFile(file: AdapterSessionFile, adapter: IngestAdapter): FileIngestResult {
+    const { filePath } = file;
+    const lastModified = file.modified;
     const existing = this.getIngestState.get(filePath) as
       | { last_size: number; last_modified: string }
       | undefined;
 
-    if (existing && existing.last_size === stat.size && existing.last_modified === lastModified) {
+    if (existing && existing.last_size === file.size && existing.last_modified === lastModified) {
       return { newMessages: 0, skipped: true };
     }
 
-    let session;
-    try {
-      session = parseSessionFile(filePath);
-    } catch {
+    const session = adapter.parseSession(file);
+    if (!session) {
       return { newMessages: 0, skipped: true };
     }
 
     if (session.messages.length === 0) {
-      this.upsertIngestState.run(filePath, stat.size, lastModified, 0);
+      this.upsertIngestState.run(filePath, file.size, lastModified, 0);
       return { newMessages: 0, skipped: false };
     }
 
-    // Decode project path from the parent directory name
-    const parentDir = basename(dirname(filePath));
-    const projectPath = decodeProjectPath(parentDir);
+    const projectPath = adapter.resolveProjectPath(file, session);
 
-    // Insert messages in a transaction for performance
     const insertAll = this.db.transaction(() => {
       let inserted = 0;
       for (const msg of session.messages) {
-        const cost = calculateMessageCost(msg).totalCost;
+        const cost = msg.totalCostUsd ?? calculateMessageCost(msg).totalCost;
         const result = this.insertMessage.run(
           msg.id,
           session.sessionId,
@@ -158,6 +146,7 @@ export class IngestService {
           msg.usage.cache_creation_input_tokens,
           cost,
           filePath,
+          adapter.id,
         );
         if (result.changes > 0) inserted++;
       }
@@ -166,7 +155,6 @@ export class IngestService {
 
     const newMessages = insertAll();
 
-    // Recompute sessions_meta from the now-up-to-date messages
     const agg = this.getSessionAggregate.get(session.sessionId) as
       | {
           first_message_at: string;
@@ -179,6 +167,7 @@ export class IngestService {
           total_cost_usd: number;
           models: string;
           project_path: string;
+          tool: string;
         }
       | undefined;
 
@@ -195,26 +184,32 @@ export class IngestService {
         agg.total_cache_creation,
         agg.total_cost_usd,
         agg.models,
+        agg.tool,
       );
     }
 
-    this.upsertIngestState.run(filePath, stat.size, lastModified, session.messages.length);
+    this.upsertIngestState.run(filePath, file.size, lastModified, session.messages.length);
     return { newMessages, skipped: false };
   }
 
   /**
-   * Ingest all JSONL session files under ~/.claude/projects/.
+   * Ingest all session files across every available adapter, optionally
+   * filtered to a specific set of tools.
    */
-  async ingestAll(): Promise<IngestStats> {
+  async ingestAll(toolFilter?: ToolId[]): Promise<IngestStats> {
     const start = Date.now();
-    const files = await findJsonlFiles();
+    const adapters = getAdapters(toolFilter);
 
     let totalNew = 0;
     let processed = 0;
-    for (const file of files) {
-      const result = this.ingestFile(file);
-      if (!result.skipped) processed++;
-      totalNew += result.newMessages;
+
+    for (const adapter of adapters) {
+      const files = await adapter.discoverSessions();
+      for (const file of files) {
+        const result = this.ingestFile(file, adapter);
+        if (!result.skipped) processed++;
+        totalNew += result.newMessages;
+      }
     }
 
     // Recompute daily summaries for the last 7 days
@@ -225,6 +220,22 @@ export class IngestService {
       newMessages: totalNew,
       durationMs: Date.now() - start,
     };
+  }
+
+  /**
+   * Per-adapter ingest that also returns counts, for CLI output that reports
+   * results tool-by-tool. Skips daily-summary recompute (caller does it once).
+   */
+  ingestAdapterFiles(adapter: IngestAdapter, files: AdapterSessionFile[]): IngestStats {
+    const start = Date.now();
+    let totalNew = 0;
+    let processed = 0;
+    for (const file of files) {
+      const result = this.ingestFile(file, adapter);
+      if (!result.skipped) processed++;
+      totalNew += result.newMessages;
+    }
+    return { filesProcessed: processed, newMessages: totalNew, durationMs: Date.now() - start };
   }
 
   /**
@@ -261,7 +272,7 @@ export class IngestService {
       }>;
 
     for (const row of rows) {
-      // Per-day model + project breakdowns
+      // Per-day model, project, and tool breakdowns
       const models = this.db
         .prepare(
           `SELECT model, SUM(cost_usd) as cost FROM messages WHERE date(timestamp) = ? GROUP BY model`,
@@ -272,9 +283,15 @@ export class IngestService {
           `SELECT project_path, SUM(cost_usd) as cost FROM messages WHERE date(timestamp) = ? GROUP BY project_path`,
         )
         .all(row.date) as Array<{ project_path: string; cost: number }>;
+      const tools = this.db
+        .prepare(
+          `SELECT tool, SUM(cost_usd) as cost FROM messages WHERE date(timestamp) = ? GROUP BY tool`,
+        )
+        .all(row.date) as Array<{ tool: string; cost: number }>;
 
       const modelBreakdown = Object.fromEntries(models.map((m) => [m.model, m.cost]));
       const projectBreakdown = Object.fromEntries(projects.map((p) => [p.project_path, p.cost]));
+      const toolBreakdown = Object.fromEntries(tools.map((t) => [t.tool, t.cost]));
 
       this.insertDailySummary.run(
         row.date,
@@ -287,6 +304,7 @@ export class IngestService {
         row.session_count,
         JSON.stringify(modelBreakdown),
         JSON.stringify(projectBreakdown),
+        JSON.stringify(toolBreakdown),
       );
     }
 

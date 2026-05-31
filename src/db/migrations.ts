@@ -123,6 +123,19 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 4,
+    description: "Multi-tool support: add tool column to messages, sessions_meta, daily_summaries",
+    up(db) {
+      db.exec(`
+        ALTER TABLE messages ADD COLUMN tool TEXT NOT NULL DEFAULT 'claude-code';
+        ALTER TABLE sessions_meta ADD COLUMN tool TEXT NOT NULL DEFAULT 'claude-code';
+        ALTER TABLE daily_summaries ADD COLUMN tool_breakdown TEXT NOT NULL DEFAULT '{}';
+        CREATE INDEX IF NOT EXISTS idx_messages_tool ON messages(tool);
+        CREATE INDEX IF NOT EXISTS idx_sessions_tool ON sessions_meta(tool);
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

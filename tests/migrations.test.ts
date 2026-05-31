@@ -59,7 +59,7 @@ describe("runMigrations", () => {
       .prepare("SELECT version FROM schema_migrations ORDER BY version")
       .all()
       .map((r) => (r as { version: number }).version);
-    expect(versions).toEqual([1, 2, 3]);
+    expect(versions).toEqual([1, 2, 3, 4]);
     db.close();
   });
 
