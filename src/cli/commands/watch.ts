@@ -11,6 +11,7 @@ export function registerWatchCommand(program: Command): void {
     .option("-s, --session <id>", "Watch a specific session")
     .option("-p, --project <path>", "Watch sessions for a specific project")
     .option("-i, --interval <ms>", "Polling interval in ms", "2000")
+    .option("--alerts", "Fire desktop/webhook notifications on cost anomalies")
     .option("--no-color", "Disable colors")
     .action(async (opts) => {
       const interval = parseInt(opts.interval, 10);
@@ -41,7 +42,7 @@ export function registerWatchCommand(program: Command): void {
       }
 
       const { waitUntilExit } = render(
-        React.createElement(Dashboard, { sessionFilePath, interval }),
+        React.createElement(Dashboard, { sessionFilePath, interval, alerts: !!opts.alerts }),
       );
       await waitUntilExit();
     });

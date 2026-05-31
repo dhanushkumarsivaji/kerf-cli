@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Box, Text, useInput, useApp } from "ink";
 import { CostMeter } from "./CostMeter.js";
 import { ContextBar } from "./ContextBar.js";
@@ -12,20 +12,25 @@ import {
 import { estimateContextOverhead } from "../../core/tokenCounter.js";
 import { analyzeCacheHealth } from "../../core/cacheHealthMonitor.js";
 import { detectAnomalies } from "../../core/anomalyDetector.js";
-import { CONTEXT_WINDOW_SIZE } from "../../core/config.js";
+import { AlertDispatcher } from "../../core/alerts.js";
+import { loadAlertConfig, CONTEXT_WINDOW_SIZE } from "../../core/config.js";
 import type { ParsedSession } from "../../types/jsonl.js";
 import type { ContextOverhead } from "../../types/config.js";
 
 interface DashboardProps {
   sessionFilePath: string;
   interval: number;
+  /** When true, fire desktop/webhook notifications for new anomalies. */
+  alerts?: boolean;
 }
 
-export function Dashboard({ sessionFilePath, interval }: DashboardProps) {
+export function Dashboard({ sessionFilePath, interval, alerts = false }: DashboardProps) {
   const { exit } = useApp();
   const [session, setSession] = useState<ParsedSession | null>(null);
   const [overhead, setOverhead] = useState<ContextOverhead>(estimateContextOverhead());
   const [showBudget, setShowBudget] = useState(false);
+  const dispatcherRef = useRef<AlertDispatcher | null>(null);
+  const seenAlertsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     function refresh() {
@@ -42,6 +47,23 @@ export function Dashboard({ sessionFilePath, interval }: DashboardProps) {
     const timer = setInterval(refresh, interval);
     return () => clearInterval(timer);
   }, [sessionFilePath, interval]);
+
+  // Fire desktop/webhook notifications for newly-seen anomalies when --alerts is on.
+  useEffect(() => {
+    if (!alerts || !session) return;
+    if (!dispatcherRef.current) {
+      dispatcherRef.current = new AlertDispatcher(loadAlertConfig());
+    }
+    const dispatcher = dispatcherRef.current;
+    const seen = seenAlertsRef.current;
+    const report = detectAnomalies(session.messages);
+    for (const anomaly of report.anomalies) {
+      const key = `${session.sessionId}:${anomaly.messageId}:${anomaly.type}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      void dispatcher.dispatch(anomaly);
+    }
+  }, [session, alerts]);
 
   useInput(
     (input) => {

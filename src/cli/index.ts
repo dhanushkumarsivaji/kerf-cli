@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { registerWatchCommand } from "./commands/watch.js";
+import { registerMonitorCommand } from "./commands/monitor.js";
 import { registerEstimateCommand } from "./commands/estimate.js";
 import { registerBudgetCommand } from "./commands/budget.js";
 import { registerAuditCommand } from "./commands/audit.js";
@@ -11,6 +12,7 @@ import { registerSummaryCommand } from "./commands/summary.js";
 import { registerSessionsCommand } from "./commands/sessions.js";
 import { registerQueryCommand } from "./commands/query.js";
 import { registerEfficiencyCommand } from "./commands/efficiency.js";
+import { registerForecastCommand } from "./commands/forecast.js";
 import { registerCacheCommand } from "./commands/cache.js";
 import { registerDoctorCommand } from "./commands/doctor.js";
 import { registerDashboardCommand } from "./commands/dashboard.js";
@@ -26,6 +28,7 @@ program
 
 // Register all subcommands
 registerWatchCommand(program);
+registerMonitorCommand(program);
 registerEstimateCommand(program);
 registerBudgetCommand(program);
 registerAuditCommand(program);
@@ -37,6 +40,7 @@ registerSummaryCommand(program);
 registerSessionsCommand(program);
 registerQueryCommand(program);
 registerEfficiencyCommand(program);
+registerForecastCommand(program);
 registerCacheCommand(program);
 registerDoctorCommand(program);
 registerDashboardCommand(program);

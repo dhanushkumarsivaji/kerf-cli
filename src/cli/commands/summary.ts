@@ -4,6 +4,7 @@ import { initDatabase } from "../../db/schema.js";
 import { runMigrations } from "../../db/migrations.js";
 import { IngestService } from "../../core/ingest.js";
 import { formatCost, formatTokens } from "../../core/costCalculator.js";
+import { forecastSpend } from "../../core/forecaster.js";
 
 type Period = "today" | "week" | "month" | "all";
 
@@ -242,6 +243,26 @@ export function registerSummaryCommand(program: Command): void {
               .map((l) => "  " + l)
               .join("\n"),
           );
+        }
+
+        // One-line spend projection for week/month views.
+        if (period === "week" || period === "month") {
+          const forecast = forecastSpend(db, period);
+          if (forecast.projectedTotal > 0) {
+            const vs =
+              forecast.vsTypical !== 0
+                ? ` ${
+                    forecast.vsTypical > 0
+                      ? chalk.yellow(`(↑ ${Math.abs(forecast.vsTypical).toFixed(0)}% above your usual)`)
+                      : chalk.green(`(↓ ${Math.abs(forecast.vsTypical).toFixed(0)}% below your usual)`)
+                  }`
+                : "";
+            console.log(
+              chalk.dim(`\n  Projected ${period}: `) +
+                chalk.bold(formatCost(forecast.projectedTotal)) +
+                vs,
+            );
+          }
         }
 
         console.log();

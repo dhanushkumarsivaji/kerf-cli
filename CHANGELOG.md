@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-05-31
+
+### Added — Intelligence & Alerts (Phase D)
+- **Real-time anomaly alerts** — `kerf monitor` is a headless background watcher
+  that tails active sessions and fires the instant a cost anomaly appears
+  (e.g. a runaway agent loop). Channels: terminal bell, desktop notification
+  (osascript/notify-send/PowerShell), and an optional webhook (Slack/Discord/generic).
+  Severity filtering and debounce included. Also `kerf watch --alerts` for the
+  interactive dashboard.
+- **Alert config persistence** — `~/.kerf/config.json` `alerts` section sets default
+  channels, minimum severity, webhook URL, and debounce.
+- **Cost forecasting** — `kerf forecast [--period week|month]` projects total spend
+  from your run-rate and compares it against your typical spend over prior periods,
+  with a confidence rating. A one-line projection is appended to
+  `kerf summary --period week|month`.
+- **Cross-tool / cross-model optimization** — `kerf efficiency --cross-tool` (default
+  when more than one model has data) ranks model-downgrade, cache-optimization, and
+  (on multi-tool installs) tool-consolidation recommendations by estimated monthly savings.
+
+### Notes
+- All new features stay local-first. The only outbound call is the opt-in alert
+  webhook you explicitly configure, which sends only the anomaly description.
+
 ## [2.2.0] - 2026-04-07
 
 ### Added

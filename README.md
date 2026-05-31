@@ -180,8 +180,14 @@ kerf efficiency --period week
 kerf efficiency --period month
 kerf efficiency --project ~/code/app
 kerf efficiency --expensive-sessions # top 10 expensive sessions
+kerf efficiency --cross-tool         # cross-model/cross-tool optimization recs
 kerf efficiency --json
 ```
+
+`--cross-tool` (shown by default when more than one model has data) adds ranked
+optimization recommendations — model-downgrade opportunities, cache-optimization
+opportunities where a low hit rate is inflating cost, and, on multi-tool installs,
+tool-consolidation recs that move routine work to the cheaper tool you already use.
 
 Example:
 ```
@@ -199,6 +205,30 @@ Example:
 ```
 
 **Run this weekly.** If your Opus share is over 50%, you're leaving money on the table.
+
+#### `kerf forecast`
+
+Projects your spend for the current week or month from your run-rate so far,
+compared against your typical spend over prior periods.
+
+```bash
+kerf forecast                  # this month
+kerf forecast --period week    # this week
+kerf forecast --json
+```
+
+Example:
+```
+  kerf forecast — this month
+
+  Spent so far:    $86.40
+  Daily run-rate:  $8.64/day
+  Projected total: $259.20 ($172.80 remaining)
+  vs. your usual:  ↑ 18% above
+  Confidence:      high
+```
+
+A one-line projection is also appended to `kerf summary --period week|month`.
 
 #### `kerf cache`
 
@@ -301,11 +331,39 @@ kerf watch                       # auto-finds active session
 kerf watch --session abc123      # specific session
 kerf watch --interval 5000       # slower refresh
 kerf watch --project ~/code/app  # filter
+kerf watch --alerts              # also fire desktop notifications on anomalies
 ```
 
 Shows: cost meter, context bar, cache health (HEALTHY/DEGRADED/BROKEN), anomaly alerts, recent messages with per-turn cache ratio.
 
 Press `q` to quit, `b` to toggle budget view.
+
+#### `kerf monitor` — real-time anomaly alerts
+
+A headless background watcher that tails your active sessions and **alerts you the instant a cost anomaly appears** — the runaway agent loop burning money while you're not looking. Runs locally, no data leaves your machine (except an optional webhook you configure).
+
+```bash
+kerf monitor                              # watch all active sessions, alert on critical anomalies
+kerf monitor --severity warning           # also alert on warnings
+kerf monitor --webhook <slack/discord url> # post alerts to a webhook
+kerf monitor --interval 5000              # poll every 5s (default 3s)
+kerf monitor --once                       # single check then exit (good for cron)
+```
+
+Alert channels (terminal bell, desktop notification, webhook), minimum severity, debounce, and a default webhook can be persisted in `~/.kerf/config.json`:
+
+```json
+{
+  "alerts": {
+    "channels": ["terminal", "desktop", "webhook"],
+    "minSeverity": "critical",
+    "webhookUrl": "https://hooks.slack.com/services/...",
+    "debounceSeconds": 120
+  }
+}
+```
+
+Desktop notifications use `osascript` (macOS), `notify-send` (Linux), or a PowerShell toast (Windows) — all best-effort and never block the watcher.
 
 #### `kerf dashboard`
 
