@@ -743,6 +743,26 @@ npm test
 
 Issues and PRs welcome. Please open an issue first for any large changes.
 
+### Releasing (maintainers)
+
+kerf publishes to npm from CI — no manual `npm publish`.
+
+**One-time setup:** add an npm **Automation** access token (npmjs.com → Access Tokens → Generate → Automation) as a repository secret named `NPM_TOKEN` (Settings → Secrets and variables → Actions).
+
+**Cut a release:**
+
+```bash
+# 1. bump version + update CHANGELOG.md, commit
+npm version 3.2.0 -m "release: v%s"   # updates package.json + package-lock.json, creates a git tag
+
+# 2. push the commit and the tag
+git push && git push --tags
+```
+
+Pushing the `v3.2.0` tag triggers `.github/workflows/publish.yml`, which runs lint + tests + build, verifies the tag matches `package.json`, and publishes to npm with provenance. The job is idempotent — if that version is already on npm it skips cleanly instead of failing. You can also trigger it manually from the Actions tab (workflow_dispatch).
+
+> Keep `package-lock.json` in sync with `package.json` (CI uses `npm ci`, which fails on a mismatch). `npm version` does this for you.
+
 ---
 
 ## License

@@ -1,0 +1,53 @@
+name: Publish to npm
+
+# Publishes to npm when you push a version tag (e.g. v3.1.0), or when run
+# manually from the Actions tab. Requires an NPM_TOKEN repository secret
+# (Automation token from npmjs.com → Access Tokens).
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # enables npm provenance
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+      # For a tag push, make sure the tag matches package.json's version.
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          PKG_VERSION="v$(node -p "require('./package.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "$PKG_VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version $PKG_VERSION"
+            exit 1
+          fi
+
+      # Idempotent: skip cleanly if this version is already on npm.
+      - name: Publish (skip if version already exists)
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "kerf-cli@${VERSION}" version >/dev/null 2>&1; then
+            echo "kerf-cli@${VERSION} is already published — nothing to do."
+          else
+            npm publish --provenance --access public
+            echo "Published kerf-cli@${VERSION}."
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

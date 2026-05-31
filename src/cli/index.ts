@@ -24,7 +24,7 @@ const program = new Command();
 program
   .name("kerf-cli")
   .version(__KERF_VERSION__)
-  .description("Cost intelligence for Claude Code. Know before you spend.");
+  .description("Cost intelligence for your AI coding agents. Know before you spend.");
 
 // Register all subcommands
 registerWatchCommand(program);
