@@ -40,6 +40,11 @@ export const MODEL_PRICING: PricingConfig = {
   "gpt-5-mini": { input: 0.25, output: 2, cacheRead: 0.025, cacheCreation: 0.25 },
   "gpt-5": { input: 1.25, output: 10, cacheRead: 0.125, cacheCreation: 1.25 },
   "o4-mini": { input: 1.1, output: 4.4, cacheRead: 0.275, cacheCreation: 1.1 },
+  // Google Gemini models — VERIFY at ai.google.dev/pricing before each release.
+  "gemini-2.5-pro": { input: 1.25, output: 10, cacheRead: 0.125, cacheCreation: 1.25 },
+  "gemini-2.5-flash": { input: 0.3, output: 2.5, cacheRead: 0.03, cacheCreation: 0.3 },
+  "gemini-3.5-flash": { input: 0.3, output: 2.5, cacheRead: 0.03, cacheCreation: 0.3 },
+  "gemini": { input: 1.25, output: 10, cacheRead: 0.125, cacheCreation: 1.25 },
 };
 
 // Alias mappings for short model names

@@ -20,7 +20,8 @@ messages (
   cache_read_tokens     INTEGER,
   cache_creation_tokens INTEGER,
   cost_usd              REAL,
-  source_file           TEXT
+  source_file           TEXT,
+  tool                  TEXT (claude-code, codex, …)
 )
 
 sessions_meta (
@@ -35,6 +36,7 @@ sessions_meta (
   total_cache_creation  INTEGER,
   total_cost_usd        REAL,
   models                TEXT (JSON array),
+  tool                  TEXT (claude-code, codex, …),
   last_synced_at        TEXT
 )
 
@@ -66,6 +68,14 @@ FROM messages
 GROUP BY project_path
 ORDER BY cost DESC
 LIMIT 10;`,
+  },
+  {
+    title: "Spend by tool (last 30 days)",
+    sql: `SELECT tool, ROUND(SUM(cost_usd), 2) AS cost, COUNT(DISTINCT session_id) AS sessions
+FROM messages
+WHERE timestamp >= date('now', '-30 days')
+GROUP BY tool
+ORDER BY cost DESC;`,
   },
   {
     title: "Last 7 days by model",

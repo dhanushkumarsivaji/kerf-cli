@@ -38,10 +38,14 @@ export function computeCacheStats(
   db: Database.Database,
   period: string = "month",
   projectPath?: string,
+  tool?: string,
 ): CacheStats {
   const filter = periodFilter(period);
   const projectClause = projectPath ? "AND project_path = ?" : "";
-  const params: string[] = projectPath ? [projectPath] : [];
+  const toolClause = tool ? "AND tool = ?" : "";
+  const params: string[] = [];
+  if (projectPath) params.push(projectPath);
+  if (tool) params.push(tool);
 
   const row = db
     .prepare(
@@ -49,7 +53,7 @@ export function computeCacheStats(
         SUM(input_tokens) as input,
         SUM(cache_read_tokens) as cache_read,
         SUM(cache_creation_tokens) as cache_creation
-       FROM messages WHERE ${filter} ${projectClause}`,
+       FROM messages WHERE ${filter} ${projectClause} ${toolClause}`,
     )
     .get(...params) as {
     input: number | null;

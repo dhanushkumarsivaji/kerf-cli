@@ -117,11 +117,21 @@ Example output:
 
 #### `kerf sync`
 
-Ingests Claude Code session JSONL files into the SQLite analytics database. Incremental — only processes files that have changed since the last sync.
+Ingests session files from every supported AI coding tool into the SQLite analytics database. Auto-detects Claude Code and Codex CLI, plus any external/OTel sources you've configured. Incremental — only processes files that have changed since the last sync.
 
 ```bash
-kerf sync                      # ingest everything
-kerf sync --json               # machine-readable stats
+kerf sync                      # ingest every detected tool
+kerf sync --tool codex         # only sync Codex CLI
+kerf sync --tool claude-code   # only sync Claude Code
+kerf sync --json               # machine-readable per-tool stats
+```
+
+Output reports per-tool counts:
+
+```
+✔ Synced 285 files, 13,695 new messages in 1.2s
+  Claude Code    247 files,  12,491 new messages
+  Codex CLI       38 files,   1,204 new messages
 ```
 
 ---
@@ -140,9 +150,11 @@ kerf summary --period all          # everything
 
 kerf summary --model               # per-model breakdown
 kerf summary --by-project          # per-project breakdown
-kerf summary --model --by-project  # both
+kerf summary --by-tool             # per-tool breakdown (Claude Code vs Codex vs …)
+kerf summary --model --by-project  # combine breakdowns
 
 kerf summary --project ~/code/app  # filter to one project
+kerf summary --tool codex          # filter to one tool
 kerf summary --no-sync             # skip auto-sync (faster)
 
 kerf summary --json                # JSON output
@@ -162,6 +174,19 @@ Example:
   Cache wr:  1.7M
 ```
 
+`--by-tool` is the cross-tool view — your total AI coding spend, split by agent:
+
+```
+  By tool:
+
+  Tool            Cost  Share  Sessions
+  -----------  -------  -----  --------
+  claude-code  $178.04    63%        25
+  codex         $89.12    31%        18
+```
+
+For week/month periods, a one-line spend projection is appended (see `kerf forecast`).
+
 #### `kerf sessions`
 
 List individual sessions or drill into one.
@@ -174,10 +199,13 @@ kerf sessions --sort messages      # longest sessions
 kerf sessions --sort duration      # longest duration
 kerf sessions --since 2026-04-01   # after a date
 kerf sessions --project ~/code/app # filter by project
+kerf sessions --tool codex         # filter by tool
 kerf sessions --json
 
 kerf sessions fa775f86             # drill into one session (partial ID match)
 ```
+
+The list includes a **Tool** column so you can see at a glance which agent each session came from.
 
 #### `kerf efficiency`
 
@@ -188,6 +216,7 @@ kerf efficiency                      # last 30 days
 kerf efficiency --period week
 kerf efficiency --period month
 kerf efficiency --project ~/code/app
+kerf efficiency --tool codex         # filter to one tool
 kerf efficiency --expensive-sessions # top 10 expensive sessions
 kerf efficiency --cross-tool         # cross-model/cross-tool optimization recs
 kerf efficiency --json
@@ -247,6 +276,7 @@ Cache hit rate analysis across all your sessions.
 kerf cache                      # last 30 days
 kerf cache --period week
 kerf cache --project ~/code/app
+kerf cache --tool codex         # filter to one tool
 kerf cache --poor-sessions      # sessions with bad cache utilization
 kerf cache --json
 ```
@@ -300,7 +330,15 @@ SELECT session_id, project_path, total_cost_usd, message_count
 FROM sessions_meta
 WHERE total_cost_usd > 5
 ORDER BY total_cost_usd DESC;
+
+-- Spend by tool (Claude Code vs Codex vs …)
+SELECT tool, ROUND(SUM(cost_usd), 2) as cost, COUNT(DISTINCT session_id) as sessions
+FROM messages
+WHERE timestamp >= date('now', '-30 days')
+GROUP BY tool ORDER BY cost DESC;
 ```
+
+Every row carries a `tool` column (`claude-code`, `codex`, or any external/OTel tool you've imported), so you can slice any query by tool.
 
 #### `kerf report`
 
@@ -319,13 +357,60 @@ kerf report --json
 
 #### `kerf import`
 
-Sync historical data into the budget tracking tables (separate from the analytics `sync`).
+Sync historical Claude Code data into the budget tracking tables (separate from the analytics `sync`).
 
 ```bash
 kerf import                        # import all sessions
 kerf import --since 2026-03-01     # only recent data
 kerf import --dry-run              # preview without writing
 ```
+
+**Importing tools that don't write JSONL/OTel (Cursor, Copilot, …):** drop a JSON file at `~/.kerf/external-additions.json` and import it into analytics:
+
+```bash
+kerf import --external                       # default ~/.kerf/external-additions.json
+kerf import --external ./cursor-export.json  # a specific file
+kerf import --external --dry-run             # preview counts
+```
+
+`kerf sync` also picks up `~/.kerf/external-additions.json` automatically. Schema:
+
+```json
+{
+  "tool": "cursor",
+  "sessions": [
+    {
+      "sessionId": "cursor-2026-05-29-001",
+      "projectPath": "/code/myapp",
+      "messages": [
+        {
+          "id": "m1",
+          "model": "claude-sonnet-4",
+          "timestamp": "2026-05-29T10:00:00Z",
+          "input_tokens": 1200,
+          "output_tokens": 800,
+          "cache_read_input_tokens": 5000,
+          "cache_creation_input_tokens": 0
+        }
+      ]
+    }
+  ]
+}
+```
+
+`tool` may be set per-session to override the top-level value. Supply `cost_usd` per message to bypass kerf's pricing; otherwise kerf computes cost from the model. This is the integration point for community-written exporters.
+
+#### OpenTelemetry sources (Gemini CLI, OpenCode, Qwen Code, …)
+
+Any agent that emits the [OpenTelemetry GenAI](https://opentelemetry.io/docs/specs/semconv/gen-ai/) convention can feed kerf. List your telemetry log files at `~/.kerf/otel-sources.json`:
+
+```json
+[
+  { "path": "/Users/me/.gemini/telemetry.log", "tool": "gemini" }
+]
+```
+
+`kerf sync` reads each source, maps `gen_ai.usage.*` token counts and `gen_ai.request.model` to kerf's schema, and tags rows with the tool. Both OTLP/JSON batches and newline-delimited records are supported. Emitter schemas vary, so verify your numbers after the first sync.
 
 ---
 
@@ -506,15 +591,21 @@ Example:
 | `kerf init` | First-time setup |
 | `kerf init --enforce-budgets` | Setup + blocking PreToolUse hook |
 | `kerf doctor` | Diagnose setup issues |
-| `kerf sync` | Ingest Claude Code sessions into SQLite |
+| `kerf sync` | Ingest every detected tool's sessions into SQLite |
+| `kerf sync --tool <id>` | Ingest a single tool |
 | `kerf summary` | Cost summary |
+| `kerf summary --by-tool` | Cross-tool spend breakdown |
 | `kerf sessions` | List/inspect sessions |
 | `kerf efficiency` | Model usage analyzer |
+| `kerf efficiency --cross-tool` | Cross-tool optimization recommendations |
 | `kerf cache` | Cache hit rate analysis |
+| `kerf forecast` | Project this week/month's spend |
 | `kerf query "<sql>"` | Read-only SQL escape hatch |
 | `kerf report` | Historical reports |
 | `kerf import` | Budget data import |
+| `kerf import --external` | Import Cursor/Copilot/etc. usage |
 | `kerf watch` | Live terminal dashboard |
+| `kerf monitor` | Headless real-time anomaly alerts |
 | `kerf dashboard` | Web dashboard (localhost:3847) |
 | `kerf estimate <task>` | Pre-flight cost estimation |
 | `kerf estimate --compare <task>` | Compare Sonnet vs Opus vs Haiku |
@@ -523,7 +614,7 @@ Example:
 | `kerf audit` | Ghost token + CLAUDE.md audit |
 | `kerf audit --fix` | Auto-reorder CLAUDE.md |
 
-Global flags on most commands: `--json`, `--csv`, `--period <today|week|month|all>`, `--project <path>`.
+Global flags on most commands: `--json`, `--csv`, `--period <today|week|month|all>`, `--project <path>`, `--tool <id>`.
 
 ---
 
@@ -568,18 +659,22 @@ kerf dashboard
 ## How kerf works
 
 ```
-Claude Code session
-       ↓ writes JSONL
-~/.claude/projects/<encoded-path>/<session>.jsonl
-       ↓ kerf sync (or auto on open)
-~/.kerf/kerf.db (SQLite)
-       ↓
-┌──────────────┬──────────────┬─────────────┐
-↓              ↓              ↓             ↓
-CLI commands   Web dashboard  SQL queries   Hooks (live)
+Claude Code          Codex CLI            External / OTel
+~/.claude/projects/   ~/.codex/sessions/   ~/.kerf/external-additions.json
+  <session>.jsonl       rollout-*.jsonl      ~/.kerf/otel-sources.json
+       \                    |                      /
+        \                   |                     /
+         ▼                  ▼                    ▼
+              kerf adapters (normalize to ParsedSession)
+                            ↓ kerf sync
+                   ~/.kerf/kerf.db (SQLite, tool-tagged rows)
+                            ↓
+        ┌──────────────┬──────────────┬─────────────┐
+        ↓              ↓              ↓             ↓
+     CLI commands   Web dashboard  SQL queries   Hooks (live)
 ```
 
-Kerf reads Claude Code's native JSONL session logs (they're already being written — kerf doesn't change how Claude Code works) and imports them into a local SQLite database. All subsequent queries hit SQLite, which is why they're fast.
+Kerf reads each tool's native session logs through a small **adapter** that normalizes them into one shape (`ParsedSession`), then imports them into a local SQLite database where every row is tagged with its source tool. Adding a new tool is just adding an adapter — the rest of kerf (summary, efficiency, cache, query, dashboard) works across all of them automatically. All subsequent queries hit SQLite, which is why they're fast.
 
 For live monitoring, kerf installs optional hooks that run during Claude Code sessions: a Notification hook logs every message, a Stop hook enforces budget warnings, and (opt-in) a PreToolUse hook blocks tool calls when over budget.
 
@@ -587,7 +682,7 @@ For live monitoring, kerf installs optional hooks that run during Claude Code se
 
 ## Privacy
 
-- **Local-only.** Data never leaves your machine. No telemetry. No network calls except for the optional `--precise` flag which uses Anthropic's free `count_tokens` API.
+- **Local-only.** Data never leaves your machine. No telemetry. No network calls in the ingest path. The only outbound calls are opt-in and explicit: the `--precise` estimate flag (Anthropic's free `count_tokens` API) and an alert webhook you configure for `kerf monitor` (which sends only the anomaly description).
 - **No API key required** for the core features.
 - **No cloud.** Your `~/.kerf/kerf.db` is yours — inspect it with `sqlite3`, back it up, delete it, wipe it at any time.
 - **Open source, MIT licensed.** Read the code, audit it, fork it.
@@ -599,8 +694,12 @@ For live monitoring, kerf installs optional hooks that run during Claude Code se
 ```
 ~/.claude/projects/                  # Claude Code's session JSONLs (kerf reads from here)
 ~/.claude/settings.json              # Hooks live here after `kerf init`
+~/.codex/sessions/                   # Codex CLI rollout JSONLs (set CODEX_HOME to override)
 ~/.kerf/
-├── kerf.db                          # SQLite database (analytics + budgets)
+├── kerf.db                          # SQLite database (analytics + budgets, tool-tagged)
+├── config.json                      # Alert config (channels, severity, webhook)
+├── external-additions.json          # Optional: import Cursor/Copilot/etc. usage
+├── otel-sources.json                # Optional: OpenTelemetry log sources
 ├── session-log.jsonl                # Hook event log
 └── hooks/
     ├── notification.sh

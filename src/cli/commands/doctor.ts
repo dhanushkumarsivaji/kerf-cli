@@ -11,6 +11,7 @@ import {
   CLAUDE_PROJECTS_DIR,
   CLAUDE_SETTINGS_GLOBAL,
 } from "../../core/config.js";
+import { getAdapters } from "../../adapters/registry.js";
 
 type Status = "ok" | "fail" | "warn";
 
@@ -59,6 +60,16 @@ function runChecks(): Check[] {
       status: "fail",
       message: `${CLAUDE_DIR} not found`,
       fix: "Install Claude Code: https://docs.anthropic.com/claude/docs/claude-code",
+    });
+  }
+
+  // 1b. Detect additional supported tools (informational — Claude Code is the baseline)
+  for (const adapter of getAdapters()) {
+    if (adapter.id === "claude-code") continue;
+    checks.push({
+      name: `${adapter.displayName} detected`,
+      status: "ok",
+      message: `kerf will ingest ${adapter.displayName} sessions on 'kerf sync'`,
     });
   }
 

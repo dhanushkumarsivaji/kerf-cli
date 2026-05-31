@@ -2,6 +2,9 @@ import type Database from "better-sqlite3";
 import { calculateMessageCost } from "./costCalculator.js";
 import { getAdapters } from "../adapters/registry.js";
 import type { IngestAdapter, AdapterSessionFile, ToolId } from "../adapters/types.js";
+import type { ParsedSession } from "../types/jsonl.js";
+import { loadExternalSessions } from "../adapters/external.js";
+import { loadOtelSessions } from "../adapters/otel.js";
 
 export interface IngestStats {
   filesProcessed: number;
@@ -129,7 +132,23 @@ export class IngestService {
     }
 
     const projectPath = adapter.resolveProjectPath(file, session);
+    const newMessages = this.writeSession(session, projectPath, adapter.id, filePath);
 
+    this.upsertIngestState.run(filePath, file.size, lastModified, session.messages.length);
+    return { newMessages, skipped: false };
+  }
+
+  /**
+   * Insert a normalized session's messages and refresh its sessions_meta row,
+   * stamping each row with the given tool id. Shared by the adapter ingest path
+   * and bulk sources (external additions, OTel logs). Returns new message count.
+   */
+  writeSession(
+    session: ParsedSession,
+    projectPath: string,
+    tool: string,
+    sourceFile: string,
+  ): number {
     const insertAll = this.db.transaction(() => {
       let inserted = 0;
       for (const msg of session.messages) {
@@ -145,8 +164,8 @@ export class IngestService {
           msg.usage.cache_read_input_tokens,
           msg.usage.cache_creation_input_tokens,
           cost,
-          filePath,
-          adapter.id,
+          sourceFile,
+          tool,
         );
         if (result.changes > 0) inserted++;
       }
@@ -188,8 +207,7 @@ export class IngestService {
       );
     }
 
-    this.upsertIngestState.run(filePath, file.size, lastModified, session.messages.length);
-    return { newMessages, skipped: false };
+    return newMessages;
   }
 
   /**
@@ -210,6 +228,19 @@ export class IngestService {
         if (!result.skipped) processed++;
         totalNew += result.newMessages;
       }
+    }
+
+    // Bulk sources (external additions + OTel logs) — ingested when their config
+    // files exist, unless filtered to a specific tool. Local-first, no network.
+    if (!toolFilter || toolFilter.includes("external")) {
+      const ext = this.ingestBulkSessions(loadExternalSessions());
+      processed += ext.files;
+      totalNew += ext.newMessages;
+    }
+    if (!toolFilter) {
+      const otel = this.ingestBulkSessions(loadOtelSessions());
+      processed += otel.files;
+      totalNew += otel.newMessages;
     }
 
     // Recompute daily summaries for the last 7 days
@@ -236,6 +267,24 @@ export class IngestService {
       totalNew += result.newMessages;
     }
     return { filesProcessed: processed, newMessages: totalNew, durationMs: Date.now() - start };
+  }
+
+  /**
+   * Ingest a list of pre-parsed bulk sessions (external additions / OTel logs).
+   * Each item carries its own tool id + project path. Idempotent via the
+   * messages UNIQUE(message_id, session_id) constraint.
+   */
+  ingestBulkSessions(
+    items: Array<{ tool: string; projectPath: string; session: ParsedSession; sourceFile: string }>,
+  ): { files: number; newMessages: number } {
+    let files = 0;
+    let newMessages = 0;
+    for (const item of items) {
+      const n = this.writeSession(item.session, item.projectPath, item.tool, item.sourceFile);
+      files++;
+      newMessages += n;
+    }
+    return { files, newMessages };
   }
 
   /**

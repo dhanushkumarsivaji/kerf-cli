@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-05-31
+
+### Added — Cross-tool views, OpenTelemetry & external import
+- **Cross-tool spend view:** `kerf summary --by-tool` breaks total spend down by
+  agent (Claude Code vs Codex vs …) with shares and session counts.
+- **`--tool <id>` filter** on `summary`, `sessions`, `efficiency`, and `cache`;
+  `sessions` gains a **Tool** column; `query` exposes the `tool` column + a by-tool example.
+- **OpenTelemetry ingestion (log-file mode):** register GenAI telemetry logs in
+  `~/.kerf/otel-sources.json`; kerf maps `gen_ai.usage.*` / `gen_ai.request.model`
+  to its schema. Tool-agnostic (works for Gemini/Antigravity, OpenCode, Qwen, …);
+  tolerates OTLP/JSON batches and newline-delimited records.
+- **External import for tools without logs (Cursor, Copilot, …):**
+  `kerf import --external [path]` ingests `~/.kerf/external-additions.json`
+  (also auto-picked-up by `kerf sync`). Documented schema for community exporters.
+- Gemini pricing added (`gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-3.5-flash`).
+- `kerf doctor` now reports every detected tool.
+
+### Fixed
+- **CI was broken:** `package-lock.json` was stuck at `0.1.0` while `package.json`
+  had advanced, so `npm ci` failed in GitHub Actions. The lockfile is now in sync.
+- Removed the npm publish workflow (`.github/workflows/publish.yml`) — releases are
+  no longer auto-published to npm.
+
 ## [3.0.0] - 2026-05-31
 
 ### Added — Multi-tool support: Codex CLI 🎉

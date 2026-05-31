@@ -52,13 +52,17 @@ export function analyzeModelDistribution(
   db: Database.Database,
   period: string = "month",
   projectPath?: string,
+  tool?: string,
 ): EfficiencyReport {
   const filter = periodFilter(period);
   const projectClause = projectPath ? "AND project_path = ?" : "";
-  const params: string[] = projectPath ? [projectPath] : [];
+  const toolClause = tool ? "AND tool = ?" : "";
+  const params: string[] = [];
+  if (projectPath) params.push(projectPath);
+  if (tool) params.push(tool);
 
   const totalRow = db
-    .prepare(`SELECT SUM(cost_usd) as total FROM messages WHERE ${filter} ${projectClause}`)
+    .prepare(`SELECT SUM(cost_usd) as total FROM messages WHERE ${filter} ${projectClause} ${toolClause}`)
     .get(...params) as { total: number | null };
   const totalCostUsd = totalRow.total ?? 0;
 
@@ -67,7 +71,7 @@ export function analyzeModelDistribution(
       `SELECT model, SUM(cost_usd) as cost, SUM(input_tokens) as input, SUM(output_tokens) as output,
               SUM(cache_read_tokens) as cache_read, SUM(cache_creation_tokens) as cache_creation,
               COUNT(*) as messages, COUNT(DISTINCT session_id) as sessions
-       FROM messages WHERE ${filter} ${projectClause}
+       FROM messages WHERE ${filter} ${projectClause} ${toolClause}
        GROUP BY model ORDER BY cost DESC`,
     )
     .all(...params) as Array<{
@@ -119,11 +123,11 @@ export function analyzeModelDistribution(
   const simpleOpusRow = db
     .prepare(
       `SELECT SUM(cost_usd) as cost, SUM(input_tokens) as input, SUM(output_tokens) as output
-       FROM messages WHERE ${filter} ${projectClause}
+       FROM messages WHERE ${filter} ${projectClause} ${toolClause}
        AND model LIKE '%opus%'
        AND session_id IN (
          SELECT session_id FROM messages
-         WHERE ${filter} ${projectClause}
+         WHERE ${filter} ${projectClause} ${toolClause}
          GROUP BY session_id
          HAVING AVG(input_tokens) < 5000 AND SUM(cache_creation_tokens) = 0
        )`,

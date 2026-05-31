@@ -19,6 +19,7 @@ export function registerEfficiencyCommand(program: Command): void {
     .description("Analyze model usage efficiency and estimate savings")
     .option("--period <period>", "today | week | month | all", "month")
     .option("--project <path>", "Filter to a specific project path")
+    .option("--tool <tool>", "Filter to a specific tool (claude-code, codex, …)")
     .option("--expensive-sessions", "List the most expensive sessions")
     .option("--cross-tool", "Show cross-tool / cross-model optimization recommendations")
     .option("--json", "Machine-readable JSON output")
@@ -33,7 +34,7 @@ export function registerEfficiencyCommand(program: Command): void {
       }
 
       try {
-        const report = analyzeModelDistribution(db, opts.period, opts.project);
+        const report = analyzeModelDistribution(db, opts.period, opts.project, opts.tool);
         const expensive = opts.expensiveSessions ? detectExpensiveSessions(db) : [];
 
         // Show cross-tool recs when explicitly requested or when >1 model has data.

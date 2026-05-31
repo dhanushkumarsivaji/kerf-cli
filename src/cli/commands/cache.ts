@@ -21,6 +21,7 @@ export function registerCacheCommand(program: Command): void {
     .description("Cache hit-rate report and savings analysis")
     .option("--period <period>", "today | week | month | all", "month")
     .option("--project <path>", "Filter to a specific project path")
+    .option("--tool <tool>", "Filter to a specific tool (claude-code, codex, …)")
     .option("--poor-sessions", "List sessions with poor cache utilization")
     .option("--json", "Machine-readable JSON output")
     .action(async (opts) => {
@@ -34,7 +35,7 @@ export function registerCacheCommand(program: Command): void {
       }
 
       try {
-        const stats = computeCacheStats(db, opts.period, opts.project);
+        const stats = computeCacheStats(db, opts.period, opts.project, opts.tool);
         const poor = opts.poorSessions ? detectPoorCacheSessions(db) : [];
 
         if (opts.json) {

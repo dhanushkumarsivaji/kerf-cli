@@ -2,7 +2,13 @@
 
 ## Overview
 
-kerf-cli is a TypeScript CLI tool that provides cost intelligence for Claude Code. It parses Claude Code's JSONL session logs, calculates token costs, and presents the data through an interactive terminal UI.
+kerf-cli is a TypeScript CLI tool that provides cost intelligence for AI coding agents. It ingests session logs from multiple tools (Claude Code, Codex CLI, plus external/OpenTelemetry sources) through a pluggable **adapter layer**, normalizes them into one shape, stores them in a local tool-tagged SQLite database, and presents the data through CLI commands, a web dashboard, SQL queries, and live hooks.
+
+### Adapter layer
+
+Each supported tool has an adapter (`src/adapters/`) implementing a single contract (`IngestAdapter`): detect whether the tool is installed, discover its session files, parse one session into the normalized `ParsedSession` shape, and resolve its project path. The `IngestService` is tool-agnostic — it drives every available adapter, stamps each row with the adapter's `tool` id, and the rest of kerf (summary, efficiency, cache, query, dashboard) works across all tools automatically. Adding a tool means adding an adapter and registering it; nothing downstream changes.
+
+Bulk sources that don't fit the one-file-one-session model — external additions (`~/.kerf/external-additions.json` for Cursor/Copilot/etc.) and OpenTelemetry logs (`~/.kerf/otel-sources.json`) — are parsed into the same `ParsedSession` shape and ingested through the shared `writeSession` path.
 
 ## System Diagram
 
@@ -40,14 +46,30 @@ kerf-cli is a TypeScript CLI tool that provides cost intelligence for Claude Cod
 ```
 kerf-cli/
 ├── src/
+│   ├── adapters/               # Pluggable per-tool ingest layer
+│   │   ├── types.ts            # IngestAdapter contract + AdapterSessionFile
+│   │   ├── registry.ts         # getAdapters() / getAdapterById()
+│   │   ├── claudeCode.ts       # Claude Code adapter (~/.claude/projects)
+│   │   ├── codex.ts            # Codex CLI adapter (~/.codex/sessions)
+│   │   ├── external.ts         # external-additions.json (Cursor/Copilot/…)
+│   │   └── otel.ts             # OpenTelemetry GenAI log sources
 │   ├── cli/                    # CLI layer
 │   │   ├── index.ts            # Entry point (Commander.js)
 │   │   ├── commands/
-│   │   │   ├── watch.ts        # Real-time dashboard
+│   │   │   ├── sync.ts         # Adapter-driven ingest (--tool filter)
+│   │   │   ├── summary.ts      # Cost summary (--by-tool, --tool)
+│   │   │   ├── sessions.ts     # Session list/detail (Tool column)
+│   │   │   ├── efficiency.ts   # Model + cross-tool optimization
+│   │   │   ├── cache.ts        # Cache hit-rate analysis
+│   │   │   ├── forecast.ts     # Spend projection
+│   │   │   ├── watch.ts        # Real-time dashboard (--alerts)
+│   │   │   ├── monitor.ts      # Headless anomaly alerts
 │   │   │   ├── estimate.ts     # Pre-flight cost estimation
 │   │   │   ├── budget.ts       # Budget management
 │   │   │   ├── audit.ts        # Ghost token audit
 │   │   │   ├── report.ts       # Historical reports
+│   │   │   ├── query.ts        # Read-only SQL
+│   │   │   ├── import.ts       # Budget + external import
 │   │   │   └── init.ts         # Setup & hook installation
 │   │   └── ui/
 │   │       ├── Dashboard.tsx   # Main Ink dashboard
@@ -56,13 +78,19 @@ kerf-cli/
 │   │       ├── BudgetAlert.tsx # Budget threshold warnings
 │   │       └── EstimateCard.tsx# Pre-flight estimate display
 │   ├── core/                   # Business logic
-│   │   ├── parser.ts           # JSONL session log parser
-│   │   ├── costCalculator.ts   # Per-model pricing engine
+│   │   ├── parser.ts           # Claude Code JSONL parser
+│   │   ├── ingest.ts           # Adapter-driven SQLite ingest (writeSession)
+│   │   ├── costCalculator.ts   # Per-model pricing (Claude, OpenAI, Gemini)
 │   │   ├── tokenCounter.ts     # Token counting + context overhead
 │   │   ├── estimator.ts        # Pre-flight cost estimation
+│   │   ├── forecaster.ts       # Week/month spend projection
+│   │   ├── anomalyDetector.ts  # Cost-spike / cache-drop detection
+│   │   ├── alerts.ts           # Alert dispatch (terminal/desktop/webhook)
+│   │   ├── efficiencyAnalyzer.ts   # Model distribution + savings
+│   │   ├── crossToolAnalyzer.ts    # Cross-tool optimization recs
+│   │   ├── cacheReporter.ts    # Cache hit/miss analysis
 │   │   ├── budgetManager.ts    # SQLite budget CRUD
-│   │   ├── cacheAnalyzer.ts    # Cache hit/miss analysis
-│   │   └── config.ts           # Constants & configuration
+│   │   └── config.ts           # Constants, paths & alert config
 │   ├── audit/                  # Audit modules
 │   │   ├── ghostTokens.ts      # Ghost token overhead calculator
 │   │   ├── claudeMdLinter.ts   # CLAUDE.md attention curve scorer
@@ -178,21 +206,34 @@ CLAUDE.md → claudeMdLinter.ts → section analysis + attention scoring
            recommendations.ts → prioritized actions
 ```
 
-## Model Pricing (as of May 2025)
+## Model Pricing
+
+Per-million-token USD rates live in `MODEL_PRICING` (`src/core/costCalculator.ts`). `resolveModelPricing` matches by exact name, then by prefix (so `gpt-5.4` → `gpt-5`), falling back to Sonnet. **Verify provider rates before each release** — they change.
 
 | Model | Input | Output | Cache Read | Cache Creation |
 |-------|-------|--------|------------|----------------|
 | Sonnet 4 | $3/M | $15/M | $0.30/M | $3.75/M |
 | Opus 4 | $15/M | $75/M | $1.50/M | $18.75/M |
 | Haiku 4 | $0.80/M | $4/M | $0.08/M | $1.00/M |
+| gpt-5 / gpt-5-codex | $1.25/M | $10/M | $0.125/M | $1.25/M |
+| gpt-5-mini | $0.25/M | $2/M | $0.025/M | $0.25/M |
+| o4-mini | $1.10/M | $4.40/M | $0.275/M | $1.10/M |
+| gemini-2.5-pro | $1.25/M | $10/M | $0.125/M | $1.25/M |
+| gemini-2.5-flash | $0.30/M | $2.50/M | $0.03/M | $0.30/M |
+
+OpenAI/Codex report `input_tokens` inclusive of the cached portion; adapters split that into uncached input + `cache_read` so cost math matches each provider's billing.
 
 ## Key Paths
 
 | Path | Purpose |
 |------|---------|
 | `~/.claude/projects/<encoded-path>/<session>.jsonl` | Claude Code session logs |
+| `~/.codex/sessions/**/rollout-*.jsonl` | Codex CLI session logs (`CODEX_HOME` overrides) |
 | `~/.claude/settings.json` | Global Claude Code settings & hooks |
 | `.claude/settings.json` | Project-level settings & hooks |
 | `.mcp.json` / `~/.claude.json` | MCP server configurations |
-| `~/.kerf/kerf.db` | SQLite database (budgets, usage) |
+| `~/.kerf/kerf.db` | SQLite database (budgets, usage; `tool`-tagged) |
+| `~/.kerf/config.json` | Alert configuration |
+| `~/.kerf/external-additions.json` | External usage import (Cursor/Copilot/…) |
+| `~/.kerf/otel-sources.json` | OpenTelemetry log source mapping |
 | `~/.kerf/session-log.jsonl` | kerf-cli hook event log |

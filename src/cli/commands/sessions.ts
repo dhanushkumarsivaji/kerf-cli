@@ -17,7 +17,19 @@ interface SessionMetaRow {
   total_cache_creation: number;
   total_cost_usd: number;
   models: string;
+  tool: string;
   last_synced_at: string;
+}
+
+const TOOL_LABELS: Record<string, string> = {
+  "claude-code": "claude",
+  codex: "codex",
+  gemini: "gemini",
+  external: "external",
+};
+
+function shortTool(t: string): string {
+  return TOOL_LABELS[t] ?? t;
 }
 
 interface MessageRow {
@@ -105,6 +117,7 @@ export function registerSessionsCommand(program: Command): void {
     .description("List or inspect Claude Code sessions from kerf's analytics database")
     .option("--limit <n>", "Maximum number of sessions to show", "20")
     .option("--project <path>", "Filter by project path")
+    .option("--tool <tool>", "Filter by tool (claude-code, codex, …)")
     .option("--since <iso_date>", "Only sessions with last_message_at >= ISO date")
     .option(
       "--sort <key>",
@@ -128,7 +141,7 @@ export function registerSessionsCommand(program: Command): void {
     });
 }
 
-function showSessionList(db: import("better-sqlite3").Database, opts: { limit: string; project?: string; since?: string; sort: string; json?: boolean }): void {
+function showSessionList(db: import("better-sqlite3").Database, opts: { limit: string; project?: string; tool?: string; since?: string; sort: string; json?: boolean }): void {
   const limit = parseInt(opts.limit, 10);
   if (isNaN(limit) || limit <= 0) {
     console.error(chalk.red("--limit must be a positive integer"));
@@ -140,6 +153,10 @@ function showSessionList(db: import("better-sqlite3").Database, opts: { limit: s
   if (opts.project) {
     where.push("project_path = ?");
     params.push(opts.project);
+  }
+  if (opts.tool) {
+    where.push("tool = ?");
+    params.push(opts.tool);
   }
   if (opts.since) {
     where.push("last_message_at >= ?");
@@ -183,9 +200,10 @@ function showSessionList(db: import("better-sqlite3").Database, opts: { limit: s
   }
 
   console.log(chalk.bold.cyan("\n  kerf sessions\n"));
-  const headers = ["When", "Project", "Models", "Msgs", "Cost", "Duration", "Session"];
+  const headers = ["When", "Tool", "Project", "Models", "Msgs", "Cost", "Duration", "Session"];
   const tableRows = rows.map((r) => [
     relativeTime(r.last_message_at),
+    shortTool(r.tool ?? "claude-code"),
     basename(r.project_path || ""),
     parseModels(r.models).map(shortModel).join(",") || "-",
     String(r.message_count),
@@ -194,7 +212,7 @@ function showSessionList(db: import("better-sqlite3").Database, opts: { limit: s
     r.session_id.slice(0, 8),
   ]);
   console.log(
-    renderTable(headers, tableRows, ["left", "left", "left", "right", "right", "right", "left"])
+    renderTable(headers, tableRows, ["left", "left", "left", "left", "right", "right", "right", "left"])
       .split("\n")
       .map((l) => "  " + l)
       .join("\n"),

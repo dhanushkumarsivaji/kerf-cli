@@ -63,8 +63,10 @@ export function registerSummaryCommand(program: Command): void {
     .description("Show cost summary from kerf's analytics database")
     .option("--period <period>", "Time period (today|week|month|all)", "today")
     .option("--project <path>", "Filter by project path")
+    .option("--tool <tool>", "Filter by tool (claude-code, codex, …)")
     .option("--model", "Show per-model breakdown")
     .option("--by-project", "Show per-project breakdown")
+    .option("--by-tool", "Show per-tool breakdown across all your AI coding agents")
     .option("--no-sync", "Skip auto-sync before querying")
     .option("--json", "Output as JSON")
     .option("--csv", "Output as CSV")
@@ -90,6 +92,10 @@ export function registerSummaryCommand(program: Command): void {
         if (opts.project) {
           where += " AND project_path = ?";
           params.push(opts.project);
+        }
+        if (opts.tool) {
+          where += " AND tool = ?";
+          params.push(opts.tool);
         }
 
         const totals = db
@@ -126,6 +132,16 @@ export function registerSummaryCommand(program: Command): void {
               .all(...params) as Array<{ project_path: string; cost: number; sessions: number }>)
           : [];
 
+        const toolRows = opts.byTool
+          ? (db
+              .prepare(
+                `SELECT tool, SUM(cost_usd) as cost, COUNT(DISTINCT session_id) as sessions
+                 FROM messages WHERE ${where}
+                 GROUP BY tool ORDER BY cost DESC`,
+              )
+              .all(...params) as Array<{ tool: string; cost: number; sessions: number }>)
+          : [];
+
         const isEmpty = !totals || totals.message_count === 0;
 
         if (opts.json) {
@@ -145,6 +161,7 @@ export function registerSummaryCommand(program: Command): void {
                 },
                 models: modelRows,
                 projects: projectRows,
+                tools: toolRows,
               },
               null,
               2,
@@ -194,6 +211,15 @@ export function registerSummaryCommand(program: Command): void {
               ),
             );
           }
+          if (opts.byTool && toolRows.length > 0) {
+            console.log();
+            console.log(
+              toCsv(
+                ["tool", "cost_usd", "sessions"],
+                toolRows.map((r) => [r.tool, String(r.cost), String(r.sessions)]),
+              ),
+            );
+          }
           return;
         }
 
@@ -239,6 +265,24 @@ export function registerSummaryCommand(program: Command): void {
           ]);
           console.log(
             renderTable(headers, rows, ["left", "right", "right"])
+              .split("\n")
+              .map((l) => "  " + l)
+              .join("\n"),
+          );
+        }
+
+        if (opts.byTool && toolRows.length > 0) {
+          const grandTotal = toolRows.reduce((sum, r) => sum + (r.cost ?? 0), 0);
+          console.log(chalk.bold("\n  By tool:\n"));
+          const headers = ["Tool", "Cost", "Share", "Sessions"];
+          const rows = toolRows.map((r) => [
+            r.tool,
+            formatCost(r.cost),
+            grandTotal > 0 ? `${((r.cost / grandTotal) * 100).toFixed(0)}%` : "-",
+            String(r.sessions),
+          ]);
+          console.log(
+            renderTable(headers, rows, ["left", "right", "right", "right"])
               .split("\n")
               .map((l) => "  " + l)
               .join("\n"),
