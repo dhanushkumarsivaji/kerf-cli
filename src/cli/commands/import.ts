@@ -12,7 +12,7 @@ import {
   parseExternalAdditions,
   EXTERNAL_ADDITIONS_PATH,
 } from "../../adapters/external.js";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 
 export function registerImportCommand(program: Command): void {
   program
@@ -87,12 +87,18 @@ function importExternal(opts: { external: string | boolean; dryRun?: boolean }):
 
   console.log(chalk.bold.cyan("\n  kerf-cli import --external\n"));
 
+  if (!existsSync(path)) {
+    console.log(chalk.yellow(`  No importable sessions found in ${path}.`));
+    console.log(chalk.dim("  See the external-additions schema in the README.\n"));
+    return;
+  }
+
   if (opts.dryRun) {
     let sessions;
     try {
       sessions = parseExternalAdditions(JSON.parse(readFileSync(path, "utf-8")), path);
     } catch (err) {
-      console.error(chalk.red(`  Failed to read ${path}:`));
+      console.error(chalk.red(`  Failed to parse ${path}:`));
       console.error("  " + (err as Error).message);
       process.exit(1);
     }

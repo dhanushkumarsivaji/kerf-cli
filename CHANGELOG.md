@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.1] - 2026-06-02
+
+### Fixed
+- **`forecast` showed $0 (timezone mismatch):** `dayjs()` returned local date while
+  SQLite `date(timestamp)` is UTC, so `daily_summaries` range queries missed
+  today's rows when the local clock was behind UTC. Fixed by using `dayjs.utc()`
+  so the period start/end always matches the UTC dates stored in the DB.
+- **`sessions <partial-id>` returned "not found":** the list shows 8-char ID
+  prefixes but the detail view required an exact match. Now accepts both full UUIDs
+  and any prefix via `session_id LIKE ? || '%'`.
+- **`import --external --dry-run` crashed with raw ENOENT on a missing file:**
+  the dry-run path bypassed the existence check that the live path had. Both paths
+  now consistently show "No importable sessions found" (exit 0) when the file is
+  absent. A file that exists but is unparseable still exits 1 with the parse error.
+
 ## [3.3.0] - 2026-06-02
 
 ### Added — CI/CD cost gates + ROI (Phase E2)

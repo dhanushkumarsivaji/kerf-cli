@@ -1,8 +1,10 @@
 import type Database from "better-sqlite3";
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek.js";
+import utc from "dayjs/plugin/utc.js";
 
 dayjs.extend(isoWeek);
+dayjs.extend(utc);
 
 export interface Forecast {
   period: "week" | "month";
@@ -57,7 +59,7 @@ function coefficientOfVariation(db: Database.Database, start: string, end: strin
 export function forecastSpend(
   db: Database.Database,
   period: "week" | "month",
-  now: dayjs.Dayjs = dayjs(),
+  now: dayjs.Dayjs = dayjs.utc(),
 ): Forecast {
   const start = period === "week" ? now.startOf("isoWeek") : now.startOf("month");
   const totalDaysInPeriod = period === "week" ? 7 : now.daysInMonth();

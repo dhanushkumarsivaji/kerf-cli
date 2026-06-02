@@ -221,9 +221,10 @@ function showSessionList(db: import("better-sqlite3").Database, opts: { limit: s
 }
 
 function showSessionDetail(db: import("better-sqlite3").Database, sessionId: string, opts: { json?: boolean }): void {
+  // Accept both full UUIDs and the 8-char prefixes shown in the list output.
   const meta = db
-    .prepare(`SELECT * FROM sessions_meta WHERE session_id = ?`)
-    .get(sessionId) as SessionMetaRow | undefined;
+    .prepare(`SELECT * FROM sessions_meta WHERE session_id = ? OR session_id LIKE ? || '%'`)
+    .get(sessionId, sessionId) as SessionMetaRow | undefined;
 
   if (!meta) {
     console.error(chalk.red(`Session not found: ${sessionId}`));
