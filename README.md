@@ -42,6 +42,8 @@ npx kerf-cli@latest <command>
 
 Both `kerf` and `kerf-cli` work as command names after a global install.
 
+**Requirements:** Node 20+. kerf uses `better-sqlite3` (a native module) which installs a prebuilt binary for current Node releases — no compiler needed. If you're on a bleeding-edge or unusual Node/platform with no prebuilt binary, npm will try to compile from source; the easy fix is to use a **Node LTS** release (20 or 22), which always has a prebuilt binary.
+
 ---
 
 ## 60-second tour

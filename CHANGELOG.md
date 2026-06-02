@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2026-06-02
+
+### Fixed
+- **Install failures on Node 24/25/26 (esp. Windows):** bumped `better-sqlite3`
+  `11.9.1 → 12.10.0`, which ships prebuilt binaries for current Node versions
+  (its engines now list `20.x || 22.x || 23.x || 24.x || 25.x || 26.x`). Previously,
+  newer Node had no prebuilt binary, so npm fell back to compiling from source and
+  failed on machines without a C/C++ toolchain (e.g. Visual Studio Build Tools).
+  No API or behavior change — purely a dependency upgrade.
+
+### Note
+- If a prebuilt binary still isn't available for your exact platform/Node combo,
+  use a Node LTS release (20 or 22), which always has one.
+
 ## [3.1.0] - 2026-05-31
 
 ### Added — Cross-tool views, OpenTelemetry & external import
