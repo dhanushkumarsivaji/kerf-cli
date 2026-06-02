@@ -13,7 +13,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write # create GitHub Releases
       id-token: write # enables npm provenance
     steps:
       - uses: actions/checkout@v4
@@ -51,3 +51,25 @@ jobs:
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Create a matching GitHub Release with notes from CHANGELOG.md.
+      # Idempotent: skips if the release already exists.
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "GitHub Release $TAG already exists — nothing to do."
+            exit 0
+          fi
+          # Pull just this version's section out of CHANGELOG.md.
+          NOTES=$(awk -v ver="## [${VERSION}]" 'index($0, ver)==1{f=1; next} /^## \[/{if(f) exit} f{print}' CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          else
+            printf '%s\n' "$NOTES" | gh release create "$TAG" --title "$TAG" --notes-file -
+          fi
+          echo "Created GitHub Release $TAG."
