@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-06-02
+
+### Added — kerf MCP server (Phase E1)
+- **`kerf mcp`** starts a Model Context Protocol server over stdio so you can ask
+  your assistant about your spend from inside Claude Code, Cursor, or any MCP
+  client — "how much did I spend on this project this week?" — without leaving the
+  editor. Register with `claude mcp add kerf -- kerf mcp`.
+- Tools exposed (all read-only): `kerf_summary`, `kerf_query`, `kerf_efficiency`,
+  `kerf_forecast`, `kerf_budget_status`.
+- **Safety:** `kerf_query` reuses the *exact same* read-only SQL guard as the
+  `kerf query` CLI (extracted to `src/core/sqlGuard.ts` so there's one definition).
+  Writes (`INSERT/UPDATE/DELETE/DROP/ALTER/…`) are rejected; the server binds to
+  stdio only and never opens a network port or modifies the database.
+
 ## [3.1.1] - 2026-06-02
 
 ### Fixed

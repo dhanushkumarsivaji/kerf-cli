@@ -471,6 +471,28 @@ kerf dashboard --port 8080  # custom port
 kerf dashboard --no-open    # don't auto-open browser
 ```
 
+#### `kerf mcp` — ask your assistant about your spend
+
+kerf ships an **MCP server** so you can query your costs in natural language from inside Claude Code, Cursor, or any MCP client — "how much have I spent on this project this week?" — without leaving your editor. It's read-only and 100% local (stdio, no network port, no writes to the database).
+
+Register it with Claude Code:
+
+```bash
+claude mcp add kerf -- kerf mcp
+```
+
+Then just ask. Claude Code calls kerf's tools and answers. Exposed tools:
+
+| Tool | What it returns |
+|------|-----------------|
+| `kerf_summary` | Cost totals + per-model/per-tool breakdown (params: `period`, `tool`, `project`) |
+| `kerf_query` | Rows from a **read-only** SQL query over the analytics DB (writes are rejected) |
+| `kerf_efficiency` | Model-usage report + cross-tool optimization recommendations |
+| `kerf_forecast` | Projected spend for the current week/month |
+| `kerf_budget_status` | Current budget usage |
+
+Safety: `kerf_query` uses the exact same read-only guard as the `kerf query` CLI — `INSERT/UPDATE/DELETE/DROP/ALTER/…` are rejected, so the server can never modify your data. It binds to stdio only and never opens a port.
+
 #### `kerf estimate`
 
 Pre-flight cost estimation. Know what a task will cost before you start.
@@ -609,6 +631,7 @@ Example:
 | `kerf watch` | Live terminal dashboard |
 | `kerf monitor` | Headless real-time anomaly alerts |
 | `kerf dashboard` | Web dashboard (localhost:3847) |
+| `kerf mcp` | MCP server — query costs from Claude Code/Cursor |
 | `kerf estimate <task>` | Pre-flight cost estimation |
 | `kerf estimate --compare <task>` | Compare Sonnet vs Opus vs Haiku |
 | `kerf budget set <amt> --period <p>` | Set project budget |

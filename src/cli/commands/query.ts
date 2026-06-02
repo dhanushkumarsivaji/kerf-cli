@@ -3,9 +3,7 @@ import chalk from "chalk";
 import { readFileSync } from "node:fs";
 import { initDatabase } from "../../db/schema.js";
 import { runMigrations } from "../../db/migrations.js";
-
-const FORBIDDEN =
-  /\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|ATTACH|PRAGMA|REPLACE|TRUNCATE)\b/i;
+import { checkReadOnlySql } from "../../core/sqlGuard.js";
 
 const SCHEMA_TEXT = `
 messages (
@@ -203,12 +201,10 @@ export function registerQueryCommand(program: Command): void {
         process.exit(1);
       }
 
-      const forbidden = sql.match(FORBIDDEN);
-      if (forbidden) {
+      const guard = checkReadOnlySql(sql);
+      if (!guard.ok) {
         console.error(
-          chalk.red(
-            `kerf query is read-only. Rejected statement: ${forbidden[1]!.toUpperCase()}`,
-          ),
+          chalk.red(`kerf query is read-only. Rejected statement: ${guard.rejected}`),
         );
         process.exit(1);
       }

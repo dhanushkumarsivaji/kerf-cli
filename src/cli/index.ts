@@ -16,6 +16,7 @@ import { registerForecastCommand } from "./commands/forecast.js";
 import { registerCacheCommand } from "./commands/cache.js";
 import { registerDoctorCommand } from "./commands/doctor.js";
 import { registerDashboardCommand } from "./commands/dashboard.js";
+import { registerMcpCommand } from "./commands/mcp.js";
 
 declare const __KERF_VERSION__: string;
 
@@ -44,6 +45,7 @@ registerForecastCommand(program);
 registerCacheCommand(program);
 registerDoctorCommand(program);
 registerDashboardCommand(program);
+registerMcpCommand(program);
 
 // Default to watch if no command given
 program.action(async () => {
