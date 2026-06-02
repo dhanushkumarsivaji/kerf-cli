@@ -1,8 +1,6 @@
 # kerf-cli
 
-**The missing cost intelligence layer for your AI coding agents.**
-
-> *kerf (n.) — the width of material removed by a cutting tool. Every token operation has a kerf.*
+**Know exactly what you're spending on AI coding — before it surprises you.**
 
 [![npm version](https://img.shields.io/npm/v/kerf-cli)](https://www.npmjs.com/package/kerf-cli)
 [![CI](https://github.com/dhanushkumarsivaji/kerf-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/dhanushkumarsivaji/kerf-cli/actions/workflows/ci.yml)
@@ -11,156 +9,223 @@
 
 ![kerf dashboard](docs/assets/dashboard.png)
 
-> Real screenshot from my own machine — `$178.04 spent in the last 7 days, 25 sessions, 98% cache hit rate, 37% of weekly budget used, $141/mo Opus → Sonnet savings`. Your numbers will look different.
+> Real screenshot from a live machine — `$178.04 spent in the last 7 days, 25 sessions, 98% cache hit rate, 37% of weekly budget used, $141/mo potential savings`.
 
-Kerf reads your AI coding agent sessions into a local SQLite database you can query with SQL. It surfaces wasted Opus spend, tracks cache hit rate, enforces budgets via Claude Code hooks, and ships a polished local web dashboard.
+---
 
-**100% local. No API keys. No telemetry. No cloud.**
+## What is kerf?
 
-### Supported tools
+If you use **Claude Code**, **Codex CLI**, or other AI coding agents, you're spending real money on every token. kerf is a free, local CLI tool that:
 
-| Tool | Status | Data source |
-|------|--------|-------------|
+- **Tracks** every AI coding session automatically — no setup beyond a one-time `kerf init`
+- **Shows** how much you've spent, by model, by project, by tool, by day
+- **Alerts** you the instant a session starts running away (runaway loops, cache drops)
+- **Helps you spend less** — finds where you're over-using expensive models and how much you'd save by switching
+- **Enforces budgets** — can physically stop Claude Code when you go over a limit
+
+Everything happens **100% on your machine**. No cloud account. No API key required. No data leaves your laptop.
+
+> *kerf (n.) — the width of material removed by a cutting tool. Every token operation has a kerf.*
+
+---
+
+## Who is this for?
+
+- **Developers using Claude Code or Codex CLI** who want to understand and control what they're spending
+- **Teams** who want to set budgets and get alerts when someone goes over
+- **Anyone** who has ever been surprised by an AI billing statement
+
+You don't need to know SQL. You don't need to understand how tokens work. The defaults just work.
+
+---
+
+## Supported tools
+
+| Tool | Status | Where kerf reads data from |
+|------|--------|---------------------------|
 | **Claude Code** | ✅ Full support | `~/.claude/projects/**/*.jsonl` |
-| **Codex CLI** (incl. Codex Desktop) | ✅ Full support | `~/.codex/sessions/**/rollout-*.jsonl` (set `CODEX_HOME` to override) |
+| **Codex CLI** (incl. Codex Desktop) | ✅ Full support | `~/.codex/sessions/**/rollout-*.jsonl` |
+| **Cursor, Copilot, others** | ✅ Via manual export | `~/.kerf/external-additions.json` |
+| **Gemini CLI, OpenCode, Qwen** | ✅ Via OpenTelemetry | `~/.kerf/otel-sources.json` |
 
-`kerf sync` auto-detects every supported tool installed on your machine and ingests them together. Filter to one with `kerf sync --tool codex`. All read commands accept `--tool <id>` to scope results to a single tool.
+kerf auto-detects which tools are installed on your machine and ingests them all with a single `kerf sync`.
 
 ---
 
 ## Install
 
+You need **Node.js 20 or newer**. Check with `node --version`. If you don't have it, download from [nodejs.org](https://nodejs.org) — pick any **LTS** version.
+
+**Install globally (recommended — use `kerf` anywhere):**
+
 ```bash
 npm install -g kerf-cli
 ```
 
-Or use without installing:
+**Or run without installing (always uses the latest version):**
 
 ```bash
 npx kerf-cli@latest <command>
 ```
 
-Both `kerf` and `kerf-cli` work as command names after a global install.
-
-**Requirements:** Node 20+. kerf uses `better-sqlite3` (a native module) which installs a prebuilt binary for current Node releases — no compiler needed. If you're on a bleeding-edge or unusual Node/platform with no prebuilt binary, npm will try to compile from source; the easy fix is to use a **Node LTS** release (20 or 22), which always has a prebuilt binary.
-
----
-
-## 60-second tour
+After a global install, both `kerf` and `kerf-cli` work as command names:
 
 ```bash
-kerf init          # one-time setup (creates DB, installs hooks)
-kerf sync          # import your Claude Code sessions into SQLite
-kerf summary       # what did I spend today?
-kerf efficiency    # am I wasting money on Opus?
-kerf dashboard     # open the polished web UI
+kerf summary     # shorter
+kerf-cli summary # same thing
 ```
 
-That's the whole tool in 5 commands. The rest is detail.
+> **Windows users:** if you see a native-module error about "Visual Studio", you're on a very new Node version without a prebuilt binary. Fix: `nvm use 22` (or install Node 22 LTS from nodejs.org) and reinstall.
 
 ---
 
-## The dashboard
+## Quick start (5 minutes)
 
 ```bash
+# Step 1 — one-time setup (creates the database, installs usage hooks)
+kerf init
+
+# Step 2 — import your sessions into kerf's database
+kerf sync
+
+# Step 3 — see what you've spent
+kerf summary
+
+# Step 4 — find wasted money
+kerf efficiency
+
+# Step 5 — open the visual dashboard
 kerf dashboard
 ```
 
-Opens a polished local web UI at `http://localhost:3847`.
-
-- **Hero metrics** — cost, sessions, tokens, cache hit rate, with trend arrows vs prior period
-- **Budget card** — progress bar, remaining amount, reset timer
-- **Efficiency card** — potential monthly savings if Opus traffic were routed to Sonnet
-- **Cache card** — hit rate donut chart, money saved from cache
-- **Cost chart** — stacked area chart broken down by Opus/Sonnet/Haiku
-- **Session table** — click any row to expand full details
-- **Period picker** — today / week / month / all
-- **Live indicator** — auto-refreshes every 5 seconds
-- **Linear-inspired dark theme**
-
-Loads in <100ms even with thousands of sessions (queries SQLite directly).
+That's it. From here, `kerf sync` + `kerf summary` is your daily habit. Everything else is when you want to dig deeper.
 
 ---
 
-## Commands reference
+## How does it work?
 
-### Setup
+When you use Claude Code or Codex CLI, they write **session log files** to your home directory. kerf reads those files, calculates the cost of every message, and stores it all in a local SQLite database (`~/.kerf/kerf.db`). That database is just a file on your machine — you own it, you can query it directly, and deleting it resets everything.
 
-#### `kerf init`
-
-First-time setup. Creates `~/.kerf/`, initializes the SQLite database, detects compatible tools, and optionally installs Claude Code hooks.
-
-```bash
-kerf init                      # warning-mode hooks (default, safe)
-kerf init --enforce-budgets    # also install PreToolUse hook that BLOCKS over budget
-kerf init --global             # install hooks in ~/.claude/ (applies to all projects)
-kerf init --no-hooks           # just create the database, skip hooks
-kerf init --hooks-only         # just install hooks, skip database setup
+```
+Claude Code logs          Codex CLI logs           External / OTel
+~/.claude/projects/       ~/.codex/sessions/        ~/.kerf/external-additions.json
+  session.jsonl             rollout-*.jsonl          ~/.kerf/otel-sources.json
+        │                        │                           │
+        └────────────────────────┴───────────────────────────┘
+                                 │
+                           kerf sync
+                                 │
+                    ~/.kerf/kerf.db  (SQLite)
+                                 │
+          ┌──────────────────────┼──────────────────────┐
+          ▼                      ▼                      ▼
+     CLI commands          Web dashboard          SQL queries
+  (summary, efficiency…)  (kerf dashboard)    (kerf query "…")
 ```
 
-#### `kerf doctor`
+Because all data is local SQLite, every command responds instantly — even with years of session history.
 
-Diagnose your setup. Checks 10 things and tells you how to fix each one.
+---
+
+## All commands
+
+### First-time setup
+
+---
+
+#### `kerf init` — set up kerf
+
+Run once after installing. Creates the `~/.kerf/` directory, initialises the database, and optionally installs hooks into Claude Code so kerf automatically logs every session.
 
 ```bash
-kerf doctor                    # human-readable checklist
-kerf doctor --json             # machine-readable
+kerf init                    # standard setup (recommended for most people)
+kerf init --enforce-budgets  # also add a hard BLOCK when you go over budget
+kerf init --global           # install hooks for all projects (not just this one)
+kerf init --no-hooks         # only create the database, skip hooks entirely
+kerf init --hooks-only       # only install hooks, database already exists
+```
+
+**What are hooks?** Hooks are small shell scripts that Claude Code runs automatically. kerf uses three:
+- **Notification hook** — logs every Claude Code message to kerf's database in real-time
+- **Stop hook** — shows you a warning when you hit 80% or 100% of your budget
+- **PreToolUse hook** *(optional, only with `--enforce-budgets`)* — physically blocks Claude Code from making tool calls when you're over budget
+
+---
+
+#### `kerf doctor` — check your setup
+
+Runs 10 checks and tells you if anything is misconfigured, with plain-English fixes.
+
+```bash
+kerf doctor         # shows a checklist in the terminal
+kerf doctor --json  # same output as JSON (useful for scripts)
 ```
 
 Example output:
 ```
 [OK]   Claude Code installed: /Users/you/.claude
-[OK]   Claude projects directory has 53 JSONL files
-[OK]   kerf database at /Users/you/.kerf/kerf.db
-[OK]   Database schema up to date (v3)
-[WARN] No budgets configured
-       Fix: kerf budget set 50 --period weekly
+[OK]   Codex CLI detected
+[OK]   Claude projects directory has session logs
+[OK]   kerf database exists and is writable
+[OK]   Database schema up to date
+[WARN] No kerf hooks registered
+       Fix: run kerf init
+[OK]   kerf hook scripts installed
 ```
 
-#### `kerf sync`
+If something is `[FAIL]` or `[WARN]`, the Fix line tells you exactly what to run.
 
-Ingests session files from every supported AI coding tool into the SQLite analytics database. Auto-detects Claude Code and Codex CLI, plus any external/OTel sources you've configured. Incremental — only processes files that have changed since the last sync.
+---
+
+#### `kerf sync` — import sessions into the database
+
+Reads all session files from your AI coding tools and imports any new messages into kerf's SQLite database. Incremental — re-running it is safe and only picks up new data.
 
 ```bash
-kerf sync                      # ingest every detected tool
-kerf sync --tool codex         # only sync Codex CLI
-kerf sync --tool claude-code   # only sync Claude Code
-kerf sync --json               # machine-readable per-tool stats
+kerf sync                  # import everything (Claude Code + Codex + any configured sources)
+kerf sync --tool claude-code  # only import Claude Code sessions
+kerf sync --tool codex        # only import Codex CLI sessions
+kerf sync --json              # show results as JSON
 ```
 
-Output reports per-tool counts:
-
+After syncing you'll see a breakdown:
 ```
 ✔ Synced 285 files, 13,695 new messages in 1.2s
   Claude Code    247 files,  12,491 new messages
   Codex CLI       38 files,   1,204 new messages
 ```
 
+> Most analytics commands (`summary`, `efficiency`, etc.) auto-sync before running, so you usually don't need to call this manually. Add `--no-sync` to any command to skip it and use whatever's already in the database.
+
 ---
 
-### Analytics
+### Understanding your spend
 
-#### `kerf summary`
+---
 
-The bread-and-butter command. What did I spend?
+#### `kerf summary` — how much did I spend?
+
+The command you'll run most often. Shows cost, messages, sessions, and token counts for a time period.
 
 ```bash
-kerf summary                       # today
-kerf summary --period week         # last 7 days
-kerf summary --period month        # last 30 days
-kerf summary --period all          # everything
+kerf summary                    # today (default)
+kerf summary --period week      # last 7 days
+kerf summary --period month     # last 30 days
+kerf summary --period all       # all time
 
-kerf summary --model               # per-model breakdown
-kerf summary --by-project          # per-project breakdown
-kerf summary --by-tool             # per-tool breakdown (Claude Code vs Codex vs …)
-kerf summary --model --by-project  # combine breakdowns
+# Break it down further
+kerf summary --model            # split by model (Opus vs Sonnet vs Haiku)
+kerf summary --by-project       # split by project folder
+kerf summary --by-tool          # split by tool (Claude Code vs Codex vs …)
 
-kerf summary --project ~/code/app  # filter to one project
-kerf summary --tool codex          # filter to one tool
-kerf summary --no-sync             # skip auto-sync (faster)
+# Filter to a specific project or tool
+kerf summary --project ~/code/myapp   # only sessions in this folder
+kerf summary --tool codex             # only Codex CLI sessions
 
-kerf summary --json                # JSON output
-kerf summary --csv                 # CSV output
+# Output formats
+kerf summary --json     # machine-readable JSON
+kerf summary --csv      # spreadsheet-friendly CSV
+kerf summary --no-sync  # skip the auto-sync (faster if data is fresh)
 ```
 
 Example:
@@ -176,8 +241,7 @@ Example:
   Cache wr:  1.7M
 ```
 
-`--by-tool` is the cross-tool view — your total AI coding spend, split by agent:
-
+**Cross-tool view** with `--by-tool`:
 ```
   By tool:
 
@@ -187,47 +251,116 @@ Example:
   codex         $89.12    31%        18
 ```
 
-For week/month periods, a one-line spend projection is appended (see `kerf forecast`).
+**Spend projection:** on `--period week` or `--period month`, kerf appends a one-line forecast of where you'll end up by end of period, based on your current run rate. See `kerf forecast` for the full breakdown.
 
-#### `kerf sessions`
+---
 
-List individual sessions or drill into one.
+#### `kerf sessions` — list your sessions
+
+Shows individual Claude Code / Codex sessions with their cost, duration, and model. Use this to find which sessions spent the most.
 
 ```bash
-kerf sessions                      # 20 most recent
-kerf sessions --limit 50           # show more
-kerf sessions --sort cost          # most expensive first
-kerf sessions --sort messages      # longest sessions
-kerf sessions --sort duration      # longest duration
-kerf sessions --since 2026-04-01   # after a date
-kerf sessions --project ~/code/app # filter by project
-kerf sessions --tool codex         # filter by tool
-kerf sessions --json
+kerf sessions                       # 20 most recent sessions
+kerf sessions --limit 50            # show more
+kerf sessions --sort cost           # most expensive first
+kerf sessions --sort messages       # most messages first
+kerf sessions --sort duration       # longest first
+kerf sessions --since 2026-04-01    # only sessions after this date
+kerf sessions --project ~/code/app  # only sessions in this folder
+kerf sessions --tool codex          # only Codex sessions
+kerf sessions --json                # JSON output
 
-kerf sessions fa775f86             # drill into one session (partial ID match)
+kerf sessions abc12345              # drill into a specific session (paste any part of the ID)
 ```
 
-The list includes a **Tool** column so you can see at a glance which agent each session came from.
+The list shows a **Tool** column so you can see Claude Code vs Codex at a glance:
+```
+  When     Tool    Project     Models     Msgs    Cost  Duration  Session
+  -------  ------  ----------  ---------  ----  ------  --------  --------
+  2h ago   claude  kerf-cli    opus-4-8    387  $38.96    36h 5m  6eb7d6ab
+  2mo ago  codex   my-trader   gpt-5.4      22   $0.41        5m  rollout-
+```
 
-#### `kerf efficiency`
+**Drilling into a session** shows a full timeline — every message with its timestamp, model, token counts, and cost:
+```bash
+kerf sessions 6eb7d6ab   # paste the ID shown in the list
+```
 
-Model usage analyzer. Shows how much you'd save if unnecessary Opus traffic were routed to Sonnet.
+---
+
+#### `kerf report` — historical report with anomalies
+
+A detailed view of a time period, including anomaly detection (unusual spikes in cost or cache drops).
 
 ```bash
-kerf efficiency                      # last 30 days
+kerf report                   # today
+kerf report --period week     # last 7 days
+kerf report --period month    # last 30 days
+kerf report --sessions        # include per-session breakdown
+kerf report --model           # include per-model breakdown
+kerf report --sessions --model  # both
+kerf report --json
+kerf report --csv
+```
+
+Example (anomaly detection built in):
+```
+  kerf-cli report — today
+
+  Total Cost:       $22.17
+  Cache Hit Rate:   98.4%
+
+  Anomalies Detected: 2
+    [CRITICAL] Turn cost $0.85 is 6x the session average of $0.14
+      → Investigate this turn for unnecessary tool calls or large file reads
+    [CRITICAL] Cache ratio dropped from 100% to 7%
+      → Cache may have been evicted — consider shorter sessions
+```
+
+---
+
+#### `kerf forecast` — where am I headed this month?
+
+Projects your total spend for the current week or month based on how much you've spent so far, compared to your typical spend in prior periods.
+
+```bash
+kerf forecast                # project this month's total
+kerf forecast --period week  # project this week's total
+kerf forecast --json
+```
+
+Example:
+```
+  kerf forecast — this month
+
+  Spent so far:    $86.40
+  Daily run-rate:  $8.64/day
+  Projected total: $259.20  ($172.80 remaining)
+  vs. your usual:  ↑ 18% above
+  Confidence:      high
+```
+
+**Confidence** is how much of the period has elapsed. After 3+ weeks it's `high`; in the first few days it's `low` — the projection is a rough extrapolation.
+
+> A one-line version of this forecast also appears automatically at the bottom of `kerf summary --period week` and `kerf summary --period month`.
+
+---
+
+#### `kerf efficiency` — am I wasting money on expensive models?
+
+The most actionable command. Tells you how much you'd save if you moved Opus traffic to Sonnet, and which sessions are driving the most cost.
+
+```bash
+kerf efficiency                      # last 30 days (default)
 kerf efficiency --period week
 kerf efficiency --period month
-kerf efficiency --project ~/code/app
-kerf efficiency --tool codex         # filter to one tool
-kerf efficiency --expensive-sessions # top 10 expensive sessions
-kerf efficiency --cross-tool         # cross-model/cross-tool optimization recs
+kerf efficiency --period all
+kerf efficiency --project ~/code/app   # filter to one project
+kerf efficiency --tool codex           # filter to one tool
+kerf efficiency --expensive-sessions   # list the 10 most expensive sessions
+kerf efficiency --cross-tool           # cross-model + cross-tool optimization tips
 kerf efficiency --json
 ```
-
-`--cross-tool` (shown by default when more than one model has data) adds ranked
-optimization recommendations — model-downgrade opportunities, cache-optimization
-opportunities where a low hit rate is inflating cost, and, on multi-tool installs,
-tool-consolidation recs that move routine work to the cheaper tool you already use.
 
 Example:
 ```
@@ -239,47 +372,34 @@ Example:
   Total spend: $200.69
 
   Model breakdown:
-    opus       $180.69 (90.0% — 2569 msgs, 30 sessions) ##############################
-    sonnet      $13.22 (6.6% — 365 msgs, 3 sessions) ##
-    haiku        $6.78 (3.4% — 239 msgs, 21 sessions) #
+    opus     $180.69  (90.0% — 2569 msgs, 30 sessions) ##############################
+    sonnet    $13.22  ( 6.6% — 365 msgs,   3 sessions) ##
+    haiku      $6.78  ( 3.4% — 239 msgs,  21 sessions) #
 ```
 
-**Run this weekly.** If your Opus share is over 50%, you're leaving money on the table.
+**What is `--cross-tool`?** When you use multiple tools (Claude Code + Codex), kerf can identify cases where you're doing similar work on a more expensive tool. It produces ranked recommendations:
+```
+  Cross-tool optimization:
+    $29.31/mo  Routing Opus traffic to Sonnet would save ~$29.31/month
+               380 Opus messages across 1 sessions in the last 30 days
+```
 
-#### `kerf forecast`
+**Run this weekly.** If your Opus share is over 50%, you're leaving significant money on the table.
 
-Projects your spend for the current week or month from your run-rate so far,
-compared against your typical spend over prior periods.
+---
+
+#### `kerf cache` — is my context caching working?
+
+Claude's prompt caching can reduce costs by up to 90% on repeated context. This command shows how much you're benefiting from it — and how much you're leaving on the table.
 
 ```bash
-kerf forecast                  # this month
-kerf forecast --period week    # this week
-kerf forecast --json
-```
-
-Example:
-```
-  kerf forecast — this month
-
-  Spent so far:    $86.40
-  Daily run-rate:  $8.64/day
-  Projected total: $259.20 ($172.80 remaining)
-  vs. your usual:  ↑ 18% above
-  Confidence:      high
-```
-
-A one-line projection is also appended to `kerf summary --period week|month`.
-
-#### `kerf cache`
-
-Cache hit rate analysis across all your sessions.
-
-```bash
-kerf cache                      # last 30 days
+kerf cache                       # last 30 days
 kerf cache --period week
-kerf cache --project ~/code/app
-kerf cache --tool codex         # filter to one tool
-kerf cache --poor-sessions      # sessions with bad cache utilization
+kerf cache --period month
+kerf cache --period all
+kerf cache --project ~/code/app  # filter to one project
+kerf cache --tool codex          # filter to one tool
+kerf cache --poor-sessions       # list sessions with low cache utilization
 kerf cache --json
 ```
 
@@ -287,95 +407,412 @@ Example:
 ```
   kerf cache report  (month)
 
-  Cache hit rate: 100.0%  (426.7M read / 426.8M cacheable)
+  Cache hit rate: 98.7%  (102.1M read / 102.1M cacheable)
 
-  Cost:
-    Cache read cost:    $128.02
-    Saved by cache:    $1152.17
-    Could still save:     $0.00 (at 80% hit rate)
+  Tokens:
+    Input (uncached):    13.4K
+    Cache reads:        102.1M
+    Cache creation:       1.3M
+
+  Cost breakdown:
+    Cache read cost:    $30.62
+    Non-cached input:    $0.04
+    Saved by cache:    $275.54   ← money cache saved you
+    Could still save:    $0.00   ← additional savings at 80% hit rate
 ```
 
-#### `kerf query`
+A hit rate above 70% is healthy. Below 30%, your sessions are probably starting cold too often — consider keeping sessions alive longer or reducing how often you restart Claude Code.
 
-Read-only SQL escape hatch. Run arbitrary SQL against the analytics database.
+---
+
+#### `kerf query` — write your own SQL queries
+
+For when you want to ask a question kerf doesn't have a built-in command for. Runs directly against the SQLite database. Completely **read-only** — write operations (INSERT, UPDATE, DELETE, etc.) are rejected.
 
 ```bash
-kerf query --schema                # print the schema
-kerf query --examples              # 5 useful example queries
-kerf query --file query.sql        # run SQL from a file
+kerf query --schema                     # print the full database schema
+kerf query --examples                   # show 5 useful example queries
 
-kerf query "SELECT model, SUM(cost_usd) FROM messages GROUP BY model"
-
-kerf query --json "SELECT * FROM sessions_meta LIMIT 5"
-kerf query --csv "SELECT date(timestamp), SUM(cost_usd) FROM messages GROUP BY 1"
+kerf query "SELECT ..."                 # run a query inline
+kerf query --file my-query.sql          # run a query from a file
+kerf query --json "SELECT ..."          # JSON output
+kerf query --csv "SELECT ..."           # CSV output
 ```
 
-**Safety:** kerf rejects INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, ATTACH, PRAGMA, REPLACE, TRUNCATE. Your data is safe from typos.
+**You don't need to know SQL to use kerf** — all the useful things are already built-in commands. But if you do know SQL, the full database is yours to explore.
 
-**Useful queries to memorize:**
+Useful queries:
 
 ```sql
--- Top 10 most expensive projects, all time
-SELECT project_path, ROUND(SUM(cost_usd), 2) as cost
+-- How much have I spent per project, all time?
+SELECT project_path, ROUND(SUM(cost_usd), 2) AS cost
 FROM messages
 GROUP BY project_path
-ORDER BY cost DESC LIMIT 10;
+ORDER BY cost DESC
+LIMIT 10;
 
--- Daily spend, last 30 days
-SELECT date(timestamp) as day, ROUND(SUM(cost_usd), 2) as cost
+-- Daily spend over the last 30 days
+SELECT date(timestamp) AS day, ROUND(SUM(cost_usd), 2) AS cost
 FROM messages
-WHERE timestamp > date('now', '-30 days')
-GROUP BY day ORDER BY day DESC;
+WHERE timestamp >= date('now', '-30 days')
+GROUP BY day
+ORDER BY day DESC;
 
--- Sessions over $5
+-- My most expensive sessions
 SELECT session_id, project_path, total_cost_usd, message_count
 FROM sessions_meta
 WHERE total_cost_usd > 5
 ORDER BY total_cost_usd DESC;
 
 -- Spend by tool (Claude Code vs Codex vs …)
-SELECT tool, ROUND(SUM(cost_usd), 2) as cost, COUNT(DISTINCT session_id) as sessions
+SELECT tool, ROUND(SUM(cost_usd), 2) AS cost, COUNT(DISTINCT session_id) AS sessions
 FROM messages
 WHERE timestamp >= date('now', '-30 days')
-GROUP BY tool ORDER BY cost DESC;
+GROUP BY tool
+ORDER BY cost DESC;
 ```
 
-Every row carries a `tool` column (`claude-code`, `codex`, or any external/OTel tool you've imported), so you can slice any query by tool.
+Every row in the database carries a `tool` column (`claude-code`, `codex`, `cursor`, etc.), so you can filter any query to a specific tool by adding `WHERE tool = 'claude-code'`.
 
-#### `kerf report`
+---
 
-Historical reports with hourly bar charts and anomaly alerts.
+### Watching your spend in real time
+
+---
+
+#### `kerf watch` — live terminal dashboard
+
+Opens a real-time dashboard in your terminal that updates every 2 seconds while Claude Code is running. Open this in a second terminal tab alongside your Claude Code session.
 
 ```bash
-kerf report                     # today
-kerf report --period week
-kerf report --period month
-kerf report --sessions          # per-session breakdown
-kerf report --model             # per-model breakdown
-kerf report --sessions --model  # both
-kerf report --csv               # CSV export
-kerf report --json
+kerf watch                         # auto-finds your active session
+kerf watch --session abc123        # watch a specific session by its ID
+kerf watch --project ~/code/app    # filter to a specific project
+kerf watch --interval 5000         # refresh every 5 seconds instead of 2
+kerf watch --alerts                # also fire desktop notifications for anomalies
 ```
 
-#### `kerf import`
+The dashboard shows:
+- **Cost meter** — how much you've spent this session and at what rate
+- **Context bar** — how full your context window is (helps you know when to start a new session)
+- **Cache health** — HEALTHY / DEGRADED / BROKEN with the current hit rate
+- **Anomaly alerts** — if a turn costs 5× more than usual or cache suddenly drops
+- **Recent messages** — last 8 messages with per-turn cost and cache ratio
 
-Sync historical Claude Code data into the budget tracking tables (separate from the analytics `sync`).
+Press `q` to quit, `b` to toggle the budget view.
+
+> **Note:** `kerf watch` requires a real terminal (TTY). It won't work piped into another command or in a non-interactive environment.
+
+---
+
+#### `kerf monitor` — background alert watcher
+
+A headless (no UI) process that runs in the background and **alerts you the moment a cost anomaly happens** — even while you're not watching. The key use case: a runaway Claude Code loop that would burn $40/hour while you step away.
 
 ```bash
-kerf import                        # import all sessions
-kerf import --since 2026-03-01     # only recent data
-kerf import --dry-run              # preview without writing
+kerf monitor                                # watch all active sessions, alert on critical anomalies
+kerf monitor --severity warning             # also alert on warnings (lower threshold)
+kerf monitor --webhook https://hooks.slack.com/...  # post alerts to Slack or Discord
+kerf monitor --interval 5000               # check every 5 seconds (default: every 3s)
+kerf monitor --once                        # check right now and exit (good for cron jobs)
 ```
 
-**Importing tools that don't write JSONL/OTel (Cursor, Copilot, …):** drop a JSON file at `~/.kerf/external-additions.json` and import it into analytics:
+Alert channels are configurable in `~/.kerf/config.json`. This persists your settings so you don't have to pass flags every time:
+
+```json
+{
+  "alerts": {
+    "channels": ["terminal", "desktop", "webhook"],
+    "minSeverity": "critical",
+    "webhookUrl": "https://hooks.slack.com/services/YOUR/WEBHOOK/URL",
+    "debounceSeconds": 120
+  }
+}
+```
+
+| Setting | Values | Default | Meaning |
+|---------|--------|---------|---------|
+| `channels` | `terminal`, `desktop`, `webhook` | `["terminal","desktop"]` | Where alerts go |
+| `minSeverity` | `critical`, `warning` | `critical` | Only fire for critical by default |
+| `webhookUrl` | any URL | (none) | Slack/Discord/generic JSON webhook |
+| `debounceSeconds` | any number | `120` | Don't repeat the same alert for 2 minutes |
+
+Desktop notifications work natively on macOS (via `osascript`), Linux (via `notify-send`), and Windows (PowerShell toast).
+
+To start the monitor automatically when your computer starts, add `kerf monitor` to your system's startup items or use a tool like `pm2`.
+
+---
+
+### Controlling costs
+
+---
+
+#### `kerf budget` — set spending limits
+
+Set a dollar limit per project per time period. kerf will warn you when you approach it, and (optionally) block Claude Code when you hit it.
 
 ```bash
-kerf import --external                       # default ~/.kerf/external-additions.json
-kerf import --external ./cursor-export.json  # a specific file
-kerf import --external --dry-run             # preview counts
+# Set a budget for the current project
+kerf budget set 50 --period weekly     # $50/week
+kerf budget set 10 --period daily      # $10/day
+kerf budget set 200 --period monthly   # $200/month
+
+# See your current budget and spend
+kerf budget show               # current project
+kerf budget show --project ~/code/other-project   # a different project
+kerf budget show --json
+
+# List budgets across all projects
+kerf budget list
+
+# Remove a budget
+kerf budget remove             # remove for current project
+
+# Check programmatically (for scripts and hooks)
+kerf budget check              # exit 0 if under budget, exit 2 if over
+kerf budget check --json       # returns JSON with full status
 ```
 
-`kerf sync` also picks up `~/.kerf/external-additions.json` automatically. Schema:
+What `kerf budget show` looks like:
+```
+  kerf budget
+
+  Period:  weekly (2026-04-07 to 2026-04-13)
+  Budget:  $50.00
+  Spent:   $42.30
+  [████████████████░░░░] 84.6%
+```
+
+**Two enforcement modes:**
+
+| Mode | How to enable | What happens when over budget |
+|------|--------------|------------------------------|
+| **Warning** (default) | `kerf init` | You see a warning, Claude Code keeps running |
+| **Blocking** (strict) | `kerf init --enforce-budgets` | Claude Code physically stops making tool calls |
+
+Warning mode is the safe default for most people. Blocking mode is for when you really need a hard cap (e.g. on a shared API key).
+
+---
+
+#### `kerf estimate` — know the cost before you start
+
+Before starting a big Claude Code task, ask kerf to estimate what it will cost. Uses complexity signals (keywords, file sizes) to predict the number of turns and cost range.
+
+```bash
+kerf estimate "fix the login bug"
+kerf estimate "rewrite the entire auth module"
+kerf estimate "add a new dashboard page with charts"
+
+kerf estimate --compare "add OAuth login"      # compare Sonnet vs Opus vs Haiku side-by-side
+kerf estimate --model opus "complex task"       # estimate for a specific model
+kerf estimate --files 'src/auth/*.ts' "refactor auth"  # include file context in the estimate
+kerf estimate --precise "refactor the parser"  # use Anthropic's API for exact token counts (needs ANTHROPIC_API_KEY)
+kerf estimate --json "any task"
+```
+
+Example `--compare` output:
+```
+  kerf-cli estimate: 'add OAuth login'
+  Complexity: moderate
+
+  Model      Turns      Low       Expected   High
+  -------------------------------------------------------
+  sonnet     10-32      $0.96     $1.68      $2.65
+  opus       10-32      $4.78     $8.38      $13.26
+  haiku      10-32      $0.25     $0.45      $0.71
+
+  Cheapest: haiku at $0.45
+  Priciest: opus at $8.38
+```
+
+The estimate is a range, not a guarantee. Actual cost depends on how many turns it takes, which files Claude Code reads, and whether it uses tools. Use it as a gut-check before committing to a large task on Opus.
+
+---
+
+#### `kerf audit` — find invisible token waste
+
+Your 200K context window fills up with "ghost tokens" — system prompts, built-in tools, MCP server definitions, and the CLAUDE.md file — before you type a single word. This command quantifies that overhead and grades your setup.
+
+```bash
+kerf audit                    # full audit with all checks
+kerf audit --claude-md-only   # only analyse your CLAUDE.md file
+kerf audit --mcp-only         # only analyse MCP server token cost
+kerf audit --fix              # auto-reorder CLAUDE.md to put critical rules where Claude reads them best
+kerf audit --json
+```
+
+Example output:
+```
+  kerf-cli audit report
+
+  Context Window Health: B (69% usable)
+
+  Ghost Token Breakdown:
+    System prompt:         14,328 tokens   (7.2%)
+    Built-in tools:        15,000 tokens   (7.5%)
+    MCP tools (0 servers):      0 tokens   (0.0%)
+    CLAUDE.md:                427 tokens   (0.2%)
+    Autocompact buffer:    33,000 tokens  (16.5%)
+    ─────────────────────────────────────────────
+    Total overhead:        62,755 tokens  (31.4%)
+    Effective window:     137,245 tokens  (68.6%)
+
+  CLAUDE.md Analysis:
+    1 critical rule in the low-attention dead zone (lines 30-70%)
+```
+
+**Grades:** A (>70% usable) · B (50-70%) · C (30-50%) · D (<30%)
+
+**The CLAUDE.md attention trick:** Claude's attention is U-shaped — it pays most attention to the first 30% and last 30% of your CLAUDE.md, and least attention to the middle 40%. Critical rules (NEVER, ALWAYS, MUST) buried in the middle often get ignored. `kerf audit --fix` automatically reorders them to the attention zones. It makes a `.kerf-backup` first so you can undo it.
+
+---
+
+### Tools for teams and CI/CD
+
+---
+
+#### `kerf ci` — attribute AI cost to a git branch
+
+Tracks how much AI coding cost is attributable to the branch you're currently working on. Useful for:
+- Understanding the AI cost of a specific feature or PR
+- Setting hard cost limits on a branch to enforce team budgets
+- Adding AI cost as a line item to your PR summaries
+
+> **How it works:** kerf records the git branch for every message. `kerf ci` queries your local database filtered to the current branch. It reads from your local machine — a cloud CI runner won't have this data unless you set up a self-hosted runner with your `~/.kerf/kerf.db`.
+
+**`kerf ci report`** — show what a branch cost:
+
+```bash
+kerf ci report                            # current branch, current folder
+kerf ci report --format json              # machine-readable output
+kerf ci report --branch feature/login     # a specific branch
+kerf ci report --any-project              # don't filter to current directory
+kerf ci report --since 2026-05-01         # only usage after this date
+kerf ci report --no-sync                  # skip syncing before reporting
+```
+
+Output (Markdown, ready for a PR comment or GitHub Step Summary):
+```markdown
+### 🪚 kerf — AI coding cost for this branch
+
+**Branch:** `feature/login`
+
+| Metric | Value |
+| --- | --- |
+| Total cost | **$11.05** |
+| Messages | 75 |
+| Sessions | 1 |
+
+| Model | Cost | Messages |
+| --- | --- | --- |
+| claude-opus-4-8 | $8.67 | 59 |
+| claude-sonnet-4-6 | $2.38 | 16 |
+```
+
+**`kerf ci gate`** — fail a build if cost is too high:
+
+```bash
+kerf ci gate --max 10.00               # exit 1 if this branch cost > $10, exit 0 if under
+kerf ci gate --max 10 --branch main    # gate a specific branch
+kerf ci gate --max 5 --any-project     # don't filter by project path
+```
+
+Exit codes: `0` = within limit, `1` = over limit, `2` = bad arguments.
+
+**Add to your GitHub workflow:**
+
+```yaml
+# Add AI cost to the PR job summary
+- run: npx kerf-cli@latest ci report --format markdown >> $GITHUB_STEP_SUMMARY
+
+# Or use the included composite action (also supports max-usd gating)
+- uses: dhanushkumarsivaji/kerf-cli/.github/actions/kerf-cost@main
+  with:
+    max-usd: "20"           # optional — fail the job if over $20
+    comment-summary: "true" # append the report to the job summary
+```
+
+---
+
+#### `kerf roi` — is it paying off? *(exploratory)*
+
+A rough "value for money" view that correlates your AI spend against code delivery (commits and merges) for the current repository. Helpful for the recurring question every manager asks: "what are we getting for this spend?"
+
+```bash
+kerf roi                    # this month (default)
+kerf roi --period week      # this week
+kerf roi --period all       # all time
+kerf roi --json
+```
+
+Example:
+```
+  kerf roi — month
+
+  Spent:    $23.01
+  Commits:  9
+  Merges:   0
+  Cost / commit: $2.56
+
+  Exploratory: commits/merges are a rough delivery proxy.
+```
+
+> Commit counts are a coarse proxy. They don't measure code quality, complexity, or impact. Use this as a conversation starter, not a hard metric.
+
+---
+
+### Ask your AI assistant about your spend
+
+---
+
+#### `kerf mcp` — query costs from inside Claude Code
+
+kerf ships a **Model Context Protocol (MCP) server** that lets Claude Code, Cursor, or any MCP-compatible AI assistant answer questions about your spend directly — without leaving your editor.
+
+Once registered, you can literally ask:
+- *"How much have I spent on this project this week?"*
+- *"Which model am I spending the most on?"*
+- *"Am I on track to stay within my monthly budget?"*
+
+**Register with Claude Code (one-time):**
+
+```bash
+claude mcp add kerf -- kerf mcp
+```
+
+Then just ask your assistant naturally — it calls kerf's tools and answers in plain English.
+
+**Available tools the assistant can use:**
+
+| Tool | What it returns |
+|------|----------------|
+| `kerf_summary` | Cost totals + breakdown by model and tool |
+| `kerf_query` | Results of any read-only SQL query |
+| `kerf_efficiency` | Model usage report + savings opportunities |
+| `kerf_forecast` | Projected spend for the current week/month |
+| `kerf_budget_status` | Current budget and how much you've used |
+
+**Safety:** The MCP server is completely read-only. It uses the same write-protection as `kerf query` — any attempt to insert, update, or delete data is rejected. It communicates over stdio only (no network port, no external connections).
+
+---
+
+## Importing data from other tools
+
+---
+
+### Cursor, Copilot, and other tools (external additions)
+
+If you use an AI coding tool that kerf doesn't natively support, you (or a community exporter script) can add its usage data manually via a JSON file at `~/.kerf/external-additions.json`.
+
+`kerf sync` picks this file up automatically. You can also import it explicitly:
+
+```bash
+kerf import --external                          # import from ~/.kerf/external-additions.json
+kerf import --external ./cursor-export.json     # import from a specific file
+kerf import --external --dry-run                # preview without writing anything
+```
+
+**File format:**
 
 ```json
 {
@@ -400,420 +837,160 @@ kerf import --external --dry-run             # preview counts
 }
 ```
 
-`tool` may be set per-session to override the top-level value. Supply `cost_usd` per message to bypass kerf's pricing; otherwise kerf computes cost from the model. This is the integration point for community-written exporters.
+Fields: `tool` (the tool name, e.g. `"cursor"`), `sessionId` (any unique string), `projectPath` (folder path), and per-message `model`, `timestamp`, token counts, and optionally `cost_usd` (if you already know the cost; otherwise kerf calculates it from the model's pricing).
 
-#### OpenTelemetry sources (Gemini CLI, OpenCode, Qwen Code, …)
+---
 
-Any agent that emits the [OpenTelemetry GenAI](https://opentelemetry.io/docs/specs/semconv/gen-ai/) convention can feed kerf. List your telemetry log files at `~/.kerf/otel-sources.json`:
+### Gemini CLI, OpenCode, Qwen Code (OpenTelemetry)
+
+Any AI coding tool that emits the [OpenTelemetry GenAI conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) can be ingested by kerf. Register your telemetry log files in `~/.kerf/otel-sources.json`:
 
 ```json
 [
-  { "path": "/Users/me/.gemini/telemetry.log", "tool": "gemini" }
+  { "path": "/Users/you/.gemini/telemetry.log", "tool": "gemini" }
 ]
 ```
 
-`kerf sync` reads each source, maps `gen_ai.usage.*` token counts and `gen_ai.request.model` to kerf's schema, and tags rows with the tool. Both OTLP/JSON batches and newline-delimited records are supported. Emitter schemas vary, so verify your numbers after the first sync.
+`kerf sync` reads each file, extracts `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, and `gen_ai.request.model`, and stores them in the database tagged with the tool name. After your first sync, run `kerf summary --by-tool` to verify the numbers look right.
 
 ---
 
-### Live monitoring
-
-#### `kerf watch`
-
-Real-time terminal dashboard for your active Claude Code session. Run in a second terminal tab while Claude Code is running.
+## Recommended daily workflow
 
 ```bash
-kerf watch                       # auto-finds active session
-kerf watch --session abc123      # specific session
-kerf watch --interval 5000       # slower refresh
-kerf watch --project ~/code/app  # filter
-kerf watch --alerts              # also fire desktop notifications on anomalies
-```
+# Morning: check yesterday's spend
+kerf summary --period week
 
-Shows: cost meter, context bar, cache health (HEALTHY/DEGRADED/BROKEN), anomaly alerts, recent messages with per-turn cache ratio.
+# Before a big task: estimate cost and check your budget
+kerf estimate --compare "the task I'm about to start"
+kerf budget show
 
-Press `q` to quit, `b` to toggle budget view.
+# Any time: open the visual dashboard
+kerf dashboard
 
-#### `kerf monitor` — real-time anomaly alerts
+# Weekly: find wasted money
+kerf efficiency
+kerf cache
 
-A headless background watcher that tails your active sessions and **alerts you the instant a cost anomaly appears** — the runaway agent loop burning money while you're not looking. Runs locally, no data leaves your machine (except an optional webhook you configure).
-
-```bash
-kerf monitor                              # watch all active sessions, alert on critical anomalies
-kerf monitor --severity warning           # also alert on warnings
-kerf monitor --webhook <slack/discord url> # post alerts to a webhook
-kerf monitor --interval 5000              # poll every 5s (default 3s)
-kerf monitor --once                       # single check then exit (good for cron)
-```
-
-Alert channels (terminal bell, desktop notification, webhook), minimum severity, debounce, and a default webhook can be persisted in `~/.kerf/config.json`:
-
-```json
-{
-  "alerts": {
-    "channels": ["terminal", "desktop", "webhook"],
-    "minSeverity": "critical",
-    "webhookUrl": "https://hooks.slack.com/services/...",
-    "debounceSeconds": 120
-  }
-}
-```
-
-Desktop notifications use `osascript` (macOS), `notify-send` (Linux), or a PowerShell toast (Windows) — all best-effort and never block the watcher.
-
-#### `kerf dashboard`
-
-Opens the polished web dashboard in your browser.
-
-```bash
-kerf dashboard              # http://localhost:3847
-kerf dashboard --port 8080  # custom port
-kerf dashboard --no-open    # don't auto-open browser
-```
-
-#### `kerf mcp` — ask your assistant about your spend
-
-kerf ships an **MCP server** so you can query your costs in natural language from inside Claude Code, Cursor, or any MCP client — "how much have I spent on this project this week?" — without leaving your editor. It's read-only and 100% local (stdio, no network port, no writes to the database).
-
-Register it with Claude Code:
-
-```bash
-claude mcp add kerf -- kerf mcp
-```
-
-Then just ask. Claude Code calls kerf's tools and answers. Exposed tools:
-
-| Tool | What it returns |
-|------|-----------------|
-| `kerf_summary` | Cost totals + per-model/per-tool breakdown (params: `period`, `tool`, `project`) |
-| `kerf_query` | Rows from a **read-only** SQL query over the analytics DB (writes are rejected) |
-| `kerf_efficiency` | Model-usage report + cross-tool optimization recommendations |
-| `kerf_forecast` | Projected spend for the current week/month |
-| `kerf_budget_status` | Current budget usage |
-
-Safety: `kerf_query` uses the exact same read-only guard as the `kerf query` CLI — `INSERT/UPDATE/DELETE/DROP/ALTER/…` are rejected, so the server can never modify your data. It binds to stdio only and never opens a port.
-
-#### `kerf estimate`
-
-Pre-flight cost estimation. Know what a task will cost before you start.
-
-```bash
-kerf estimate "fix typo in README"
-kerf estimate "refactor the auth module"
-kerf estimate "build a complete dashboard from scratch"
-
-kerf estimate --compare "add feature"       # sonnet vs opus vs haiku table
-kerf estimate --model opus "complex task"   # specific model
-kerf estimate --files 'src/auth/*.ts' "add OAuth"  # with file context
-kerf estimate --precise "refactor parser"   # uses Anthropic API (needs ANTHROPIC_API_KEY)
-kerf estimate --json "fix bug"
-```
-
-Example compare output:
-```
-  kerf-cli estimate: 'add feature'
-
-  Model      Turns          Low          Expected     High
-  ----------------------------------------------------------
-  sonnet     5-15           $0.67        $1.05        $1.45
-  opus       5-15           $3.35        $5.24        $7.26
-  haiku      5-15           $0.18        $0.28        $0.39
-
-  Cheapest: haiku at $0.28
-  Priciest: opus at $5.24
+# When something seems wrong: diagnose
+kerf doctor
+kerf report --period week
 ```
 
 ---
 
-### Budgets & enforcement
-
-#### `kerf budget`
-
-Set spending limits per project.
-
-```bash
-kerf budget set 50 --period weekly   # set budget
-kerf budget set 10 --period daily
-kerf budget set 200 --period monthly
-
-kerf budget show                      # current project budget
-kerf budget show --json
-kerf budget list                      # all projects with budgets
-kerf budget remove                    # remove current budget
-
-kerf budget check                     # exit code 0 if under, 2 if over (for hooks)
-kerf budget check --json
-```
-
-Example:
-```
-  kerf budget
-
-  Period:  weekly (2026-04-07 to 2026-04-13)
-  Budget:  $50.00
-  Spent:   $42.30
-  [████████████████░░░░] 84.6%
-```
-
-#### Two enforcement modes
-
-**Warning mode (default):**
-```bash
-kerf init   # installs Notification + Stop hooks
-```
-You get warnings at 80% and alerts at 100% but Claude Code keeps running.
-
-**Blocking mode (opt-in):**
-```bash
-kerf init --enforce-budgets
-```
-Also installs a PreToolUse hook that returns exit code 2 to Claude Code when over budget. Claude Code physically stops the tool call.
-
----
-
-### Optimization
-
-#### `kerf audit`
-
-Find invisible token waste eating your 200K context window.
-
-```bash
-kerf audit                      # full audit
-kerf audit --claude-md-only     # per-section CLAUDE.md analysis
-kerf audit --mcp-only           # MCP server analysis
-kerf audit --fix                # auto-reorder CLAUDE.md for optimal attention
-kerf audit --json
-```
-
-Example:
-```
-  kerf-cli audit report
-
-  Context Window Health: B (69% usable)
-
-  Ghost Token Breakdown:
-    System prompt:         14,328 tokens (7.2%)
-    Built-in tools:        15,000 tokens (7.5%)
-    MCP tools (0 srv):          0 tokens (0.0%)
-    CLAUDE.md:                427 tokens (0.2%)
-    Autocompact buffer:    33,000 tokens (16.5%)
-    ----------------------------------------
-    Total overhead:        62,755 tokens (31.4%)
-    Effective window:     137,245 tokens (68.6%)
-```
-
-**Grades:** A (>70% usable) · B (50-70%) · C (30-50%) · D (<30%)
-
-**The CLAUDE.md attention curve:** Claude's attention is U-shaped. Rules at the top (0-30%) and bottom (70-100%) of the file get high attention. The middle 30-70% is a "dead zone." Run `kerf audit --fix` to auto-reorder critical rules (NEVER, ALWAYS, MUST) out of the dead zone. It creates a `.kerf-backup` first.
-
----
-
-### CI / cost gates
-
-Attribute AI coding cost to a **git branch** and optionally fail a check when it's too high. kerf reads the **local** analytics DB, so these run where your usage data lives — your machine (e.g. a pre-push hook) or a runner that has your `~/.kerf/kerf.db`. Branch attribution comes from the `git_branch` recorded on each message (populated for sessions on a real branch; "HEAD"/detached is ignored).
-
-#### `kerf ci report`
-
-```bash
-kerf ci report                       # markdown for the current branch + repo
-kerf ci report --format json         # machine-readable
-kerf ci report --branch feature/x    # a specific branch (default: auto-detected)
-kerf ci report --any-project         # don't restrict to the current directory
-kerf ci report --since 2026-05-01    # only usage since a date
-```
-
-Branch is auto-detected from CI env (`GITHUB_HEAD_REF`/`GITHUB_REF_NAME`/…) then local git. Markdown output is ready to drop into a PR comment or `$GITHUB_STEP_SUMMARY`.
-
-#### `kerf ci gate`
-
-```bash
-kerf ci gate --max 5.00               # exit 1 if this branch's AI cost > $5
-kerf ci gate --max 5 --branch main    # gate a specific branch
-```
-
-Exit codes: `0` within limit, `1` over limit, `2` bad arguments — wire it straight into a CI step.
-
-#### GitHub Action
-
-A composite action ships at `.github/actions/kerf-cost`:
-
-```yaml
-- uses: dhanushkumarsivaji/kerf-cli/.github/actions/kerf-cost@main
-  with:
-    max-usd: "10"        # optional: fail the job over this amount
-    comment-summary: "true"
-```
-
-Or inline:
-
-```yaml
-- run: npx kerf-cli@latest ci report --format markdown >> $GITHUB_STEP_SUMMARY
-```
-
-> Honesty note: a stock cloud runner has no local kerf data, so it reports `$0.00`. This is meaningful on a self-hosted runner with the team's usage, or run locally as a pre-push gate. kerf stays local-first.
-
-#### `kerf roi` (exploratory)
-
-Rough "is it paying off" view — spend vs delivery (commits/merges) for the current repo:
-
-```bash
-kerf roi --period month    # $ spent, commits, merges, $/commit
-kerf roi --json
-```
-
-Marked exploratory: commit counts are a coarse proxy for output.
-
----
-
-## All commands at a glance
+## Quick reference — all commands
 
 | Command | What it does |
 |---------|-------------|
-| `kerf init` | First-time setup |
-| `kerf init --enforce-budgets` | Setup + blocking PreToolUse hook |
-| `kerf doctor` | Diagnose setup issues |
-| `kerf sync` | Ingest every detected tool's sessions into SQLite |
-| `kerf sync --tool <id>` | Ingest a single tool |
-| `kerf summary` | Cost summary |
-| `kerf summary --by-tool` | Cross-tool spend breakdown |
-| `kerf sessions` | List/inspect sessions |
-| `kerf efficiency` | Model usage analyzer |
-| `kerf efficiency --cross-tool` | Cross-tool optimization recommendations |
-| `kerf cache` | Cache hit rate analysis |
-| `kerf forecast` | Project this week/month's spend |
-| `kerf query "<sql>"` | Read-only SQL escape hatch |
-| `kerf report` | Historical reports |
-| `kerf import` | Budget data import |
-| `kerf import --external` | Import Cursor/Copilot/etc. usage |
-| `kerf watch` | Live terminal dashboard |
-| `kerf monitor` | Headless real-time anomaly alerts |
-| `kerf dashboard` | Web dashboard (localhost:3847) |
-| `kerf mcp` | MCP server — query costs from Claude Code/Cursor |
-| `kerf ci report` | Branch/PR AI cost as JSON or Markdown |
-| `kerf ci gate --max <usd>` | Fail CI when branch cost exceeds a limit |
-| `kerf roi` | Exploratory: spend vs commits/merges |
-| `kerf estimate <task>` | Pre-flight cost estimation |
-| `kerf estimate --compare <task>` | Compare Sonnet vs Opus vs Haiku |
-| `kerf budget set <amt> --period <p>` | Set project budget |
-| `kerf budget show / list / remove / check` | Budget management |
-| `kerf audit` | Ghost token + CLAUDE.md audit |
-| `kerf audit --fix` | Auto-reorder CLAUDE.md |
+| `kerf init` | First-time setup (database + hooks) |
+| `kerf init --enforce-budgets` | Setup + hard-block when over budget |
+| `kerf doctor` | Check for setup problems |
+| `kerf sync` | Import sessions from all tools into the database |
+| `kerf sync --tool <id>` | Import from one specific tool |
+| `kerf summary` | Cost summary (default: today) |
+| `kerf summary --period week\|month\|all` | Different time windows |
+| `kerf summary --by-tool` | Split cost by tool (Claude Code vs Codex vs …) |
+| `kerf summary --model` | Split cost by model (Opus vs Sonnet vs Haiku) |
+| `kerf summary --by-project` | Split cost by project folder |
+| `kerf sessions` | List recent sessions |
+| `kerf sessions <id>` | Full detail for one session |
+| `kerf report` | Detailed report with anomaly detection |
+| `kerf efficiency` | Find wasted spend on expensive models |
+| `kerf efficiency --cross-tool` | Cross-tool optimization tips |
+| `kerf forecast` | Project spend to end of week/month |
+| `kerf cache` | Cache hit rate and savings analysis |
+| `kerf query "<sql>"` | Run custom SQL against the analytics database |
+| `kerf query --examples` | Show example SQL queries |
+| `kerf watch` | Live terminal dashboard (while Claude Code is running) |
+| `kerf watch --alerts` | Live dashboard + desktop notifications |
+| `kerf monitor` | Background alert watcher (headless) |
+| `kerf monitor --once` | Check once and exit |
+| `kerf monitor --webhook <url>` | Send alerts to Slack/Discord |
+| `kerf dashboard` | Open visual web dashboard in browser |
+| `kerf budget set <$> --period <p>` | Set a spending limit |
+| `kerf budget show` | Show current budget and spend |
+| `kerf budget list` | Show all project budgets |
+| `kerf budget remove` | Remove budget for current project |
+| `kerf budget check` | Exit 0 if under, 2 if over (for scripts) |
+| `kerf estimate "<task>"` | Estimate cost before starting |
+| `kerf estimate --compare "<task>"` | Compare Sonnet vs Opus vs Haiku |
+| `kerf audit` | Find invisible token waste |
+| `kerf audit --fix` | Auto-fix CLAUDE.md attention ordering |
+| `kerf import` | Import historical Claude Code data into budget tables |
+| `kerf import --external [path]` | Import Cursor/Copilot/other tool data |
+| `kerf mcp` | Start MCP server (ask AI assistants about your spend) |
+| `kerf ci report` | Report branch AI cost as Markdown or JSON |
+| `kerf ci gate --max <$>` | Fail CI/build when branch cost is too high |
+| `kerf roi` | Spend vs commits/merges (exploratory) |
 
-Global flags on most commands: `--json`, `--csv`, `--period <today|week|month|all>`, `--project <path>`, `--tool <id>`.
-
----
-
-## Recommended workflow
-
-**Daily (30 sec):**
-```bash
-kerf summary --by-project
-```
-
-**Weekly (2 min):**
-```bash
-kerf summary --period week
-kerf efficiency
-kerf cache
-```
-
-**Before a big task:**
-```bash
-kerf estimate --compare "what I'm about to do"
-kerf budget show
-```
-
-**When something looks wrong:**
-```bash
-kerf doctor
-kerf audit
-```
-
-**When you want a custom view:**
-```bash
-kerf query "SELECT ... FROM messages WHERE ..."
-```
-
-**When you want visuals:**
-```bash
-kerf dashboard
-```
+**Flags that work on most commands:**
+- `--json` — machine-readable JSON output
+- `--csv` — spreadsheet-friendly CSV output
+- `--period today|week|month|all` — time window
+- `--project <path>` — filter to a specific project folder
+- `--tool claude-code|codex|…` — filter to a specific AI tool
+- `--no-sync` — skip auto-sync before querying (faster)
 
 ---
 
-## How kerf works
+## Privacy and data
 
-```
-Claude Code          Codex CLI            External / OTel
-~/.claude/projects/   ~/.codex/sessions/   ~/.kerf/external-additions.json
-  <session>.jsonl       rollout-*.jsonl      ~/.kerf/otel-sources.json
-       \                    |                      /
-        \                   |                     /
-         ▼                  ▼                    ▼
-              kerf adapters (normalize to ParsedSession)
-                            ↓ kerf sync
-                   ~/.kerf/kerf.db (SQLite, tool-tagged rows)
-                            ↓
-        ┌──────────────┬──────────────┬─────────────┐
-        ↓              ↓              ↓             ↓
-     CLI commands   Web dashboard  SQL queries   Hooks (live)
-```
-
-Kerf reads each tool's native session logs through a small **adapter** that normalizes them into one shape (`ParsedSession`), then imports them into a local SQLite database where every row is tagged with its source tool. Adding a new tool is just adding an adapter — the rest of kerf (summary, efficiency, cache, query, dashboard) works across all of them automatically. All subsequent queries hit SQLite, which is why they're fast.
-
-For live monitoring, kerf installs optional hooks that run during Claude Code sessions: a Notification hook logs every message, a Stop hook enforces budget warnings, and (opt-in) a PreToolUse hook blocks tool calls when over budget.
+- **Everything stays on your machine.** Session data, cost calculations, and the database never leave your computer.
+- **No telemetry.** kerf does not phone home.
+- **No API key needed** for core features. The only optional network call is `kerf estimate --precise`, which uses Anthropic's free token-counting API if you have `ANTHROPIC_API_KEY` set.
+- **The one outbound call that's opt-in:** `kerf monitor --webhook <url>` sends anomaly alert text to a webhook URL you explicitly configure. It sends only the alert description — no session content, no file paths.
+- **Your database is yours.** `~/.kerf/kerf.db` is a standard SQLite file. Open it with any SQLite client, back it up, or delete it.
+- **Open source, MIT licensed.** Read every line of code at [github.com/dhanushkumarsivaji/kerf-cli](https://github.com/dhanushkumarsivaji/kerf-cli).
 
 ---
 
-## Privacy
-
-- **Local-only.** Data never leaves your machine. No telemetry. No network calls in the ingest path. The only outbound calls are opt-in and explicit: the `--precise` estimate flag (Anthropic's free `count_tokens` API) and an alert webhook you configure for `kerf monitor` (which sends only the anomaly description).
-- **No API key required** for the core features.
-- **No cloud.** Your `~/.kerf/kerf.db` is yours — inspect it with `sqlite3`, back it up, delete it, wipe it at any time.
-- **Open source, MIT licensed.** Read the code, audit it, fork it.
-
----
-
-## Files & paths
+## Files on your machine
 
 ```
-~/.claude/projects/                  # Claude Code's session JSONLs (kerf reads from here)
-~/.claude/settings.json              # Hooks live here after `kerf init`
-~/.codex/sessions/                   # Codex CLI rollout JSONLs (set CODEX_HOME to override)
+~/.claude/projects/                  ← Claude Code writes session logs here; kerf reads them
+~/.claude/settings.json              ← kerf hooks are registered here (after kerf init)
+~/.codex/sessions/                   ← Codex CLI writes session logs here; kerf reads them
 ~/.kerf/
-├── kerf.db                          # SQLite database (analytics + budgets, tool-tagged)
-├── config.json                      # Alert config (channels, severity, webhook)
-├── external-additions.json          # Optional: import Cursor/Copilot/etc. usage
-├── otel-sources.json                # Optional: OpenTelemetry log sources
-├── session-log.jsonl                # Hook event log
+├── kerf.db                          ← The analytics database (all your cost data)
+├── config.json                      ← Alert settings (channels, severity, webhook URL)
+├── external-additions.json          ← Optional: manually import Cursor/Copilot/etc. data
+├── otel-sources.json                ← Optional: OpenTelemetry log file sources
+├── session-log.jsonl                ← Hook event log (written by the notification hook)
 └── hooks/
-    ├── notification.sh
-    ├── stop.sh
-    └── pretool.sh                   # Only if --enforce-budgets
+    ├── notification.sh              ← Logs every message (installed by kerf init)
+    ├── stop.sh                      ← Budget warning at 80%/100% (installed by kerf init)
+    └── pretool.sh                   ← Hard block when over budget (only with --enforce-budgets)
 ```
 
 ---
 
-## Why not ccusage?
+## Why kerf instead of ccusage?
 
-ccusage is a great quick cost reporter. Kerf is what you reach for when you need:
+[ccusage](https://github.com/ryoppippi/ccusage) is a great quick cost checker. kerf is what you reach for when you need more:
 
-- A queryable analytics layer — `kerf query "SELECT ..."`
-- Real budget enforcement — blocks Claude Code via hooks, not just warns
-- Cost-per-project attribution
-- Model efficiency analysis with concrete $ savings
-- Cache hit rate visibility
-- A polished web dashboard
-- Long-term history beyond Claude Code's 30-day log deletion
+| | ccusage | kerf |
+|--|---------|------|
+| Quick cost check | ✅ | ✅ |
+| Budget enforcement | ❌ | ✅ hooks that warn or block |
+| Cost-per-project attribution | ❌ | ✅ |
+| Model efficiency analysis | ❌ | ✅ $ savings estimate |
+| Cache hit rate visibility | ❌ | ✅ |
+| Web dashboard | ❌ | ✅ |
+| SQL query interface | ❌ | ✅ |
+| Multiple AI tools (Codex, etc.) | ❌ | ✅ |
+| Real-time anomaly alerts | ❌ | ✅ |
+| MCP server (ask in your editor) | ❌ | ✅ |
+| CI/CD cost gates | ❌ | ✅ |
 
-They complement each other. Use ccusage for a quick check, kerf when you need to actually do something about your spend.
+They complement each other. Use ccusage for a 5-second check, kerf when you actually want to do something about your spend.
 
 ---
 
 ## Learn more
 
-- [CHANGELOG.md](CHANGELOG.md) — version history
-- [ARCHITECTURE.md](ARCHITECTURE.md) — project structure and design decisions
+- [CHANGELOG.md](CHANGELOG.md) — full version history
+- [ARCHITECTURE.md](ARCHITECTURE.md) — how the code is structured (for contributors)
 
 ---
 
@@ -826,27 +1003,25 @@ npm install
 npm test
 ```
 
-Issues and PRs welcome. Please open an issue first for any large changes.
+Issues and PRs are welcome. Please open an issue first for large changes so we can discuss the approach.
 
-### Releasing (maintainers)
+### Releasing (maintainers only)
 
-kerf publishes to npm from CI — no manual `npm publish`.
+kerf publishes to npm automatically via GitHub Actions — no manual `npm publish`.
 
-**One-time setup:** add an npm **Automation** access token (npmjs.com → Access Tokens → Generate → Automation) as a repository secret named `NPM_TOKEN` (Settings → Secrets and variables → Actions).
+**One-time setup:** create an npm Automation token at npmjs.com → Access Tokens, then add it as `NPM_TOKEN` in the GitHub repo's Settings → Secrets and variables → Actions.
 
-**Cut a release:**
+**To cut a release:**
 
 ```bash
-# 1. bump version + update CHANGELOG.md, commit
-npm version 3.2.0 -m "release: v%s"   # updates package.json + package-lock.json, creates a git tag
+# 1. Update CHANGELOG.md, then bump the version (this also creates a git tag)
+npm version 3.4.0 -m "release: v%s"
 
-# 2. push the commit and the tag
+# 2. Push the commit and the tag
 git push && git push --tags
 ```
 
-Pushing the `v3.2.0` tag triggers `.github/workflows/publish.yml`, which runs lint + tests + build, verifies the tag matches `package.json`, and publishes to npm with provenance. The job is idempotent — if that version is already on npm it skips cleanly instead of failing. You can also trigger it manually from the Actions tab (workflow_dispatch).
-
-> Keep `package-lock.json` in sync with `package.json` (CI uses `npm ci`, which fails on a mismatch). `npm version` does this for you.
+Pushing the tag (`v3.4.0`) triggers the workflow: lint → test → build → publish to npm → create GitHub Release with CHANGELOG notes. The workflow is idempotent — if that version is already on npm it skips rather than failing.
 
 ---
 
