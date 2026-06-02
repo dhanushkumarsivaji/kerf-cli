@@ -1,0 +1,42 @@
+name: "kerf AI cost report"
+description: "Report (and optionally gate) the AI coding cost attributable to the current branch using kerf."
+author: "Dhanush Kumar Sivaji"
+
+# NOTE: kerf reads the LOCAL kerf database (~/.kerf/kerf.db) populated from each
+# developer's AI coding sessions. Cloud-hosted runners do not have that data, so
+# this action is meaningful on a self-hosted runner that has the team's usage
+# data available, or when you provide a pre-populated ~/.kerf/kerf.db. On a stock
+# cloud runner it will simply report $0.00 (no local usage data present).
+
+inputs:
+  max-usd:
+    description: "If set, fail the job when branch cost exceeds this USD amount."
+    required: false
+    default: ""
+  branch:
+    description: "Branch to attribute to (default: auto-detected from the PR/ref)."
+    required: false
+    default: ""
+  comment-summary:
+    description: "Append the Markdown report to the GitHub job summary."
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Report AI coding cost
+      shell: bash
+      run: |
+        BRANCH_ARG=""
+        if [ -n "${{ inputs.branch }}" ]; then BRANCH_ARG="--branch ${{ inputs.branch }}"; fi
+
+        if [ "${{ inputs.comment-summary }}" = "true" ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+          npx -y kerf-cli@latest ci report --format markdown $BRANCH_ARG >> "$GITHUB_STEP_SUMMARY"
+        else
+          npx -y kerf-cli@latest ci report --format markdown $BRANCH_ARG
+        fi
+
+        if [ -n "${{ inputs.max-usd }}" ]; then
+          npx -y kerf-cli@latest ci gate --max "${{ inputs.max-usd }}" $BRANCH_ARG
+        fi

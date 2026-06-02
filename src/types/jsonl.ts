@@ -16,6 +16,8 @@ export interface RawJsonlMessage {
   usage?: Partial<MessageUsage>;
   timestamp?: string;
   total_cost_usd?: number;
+  /** Git branch the session was on (Claude Code records this per line) */
+  gitBranch?: string;
   // streaming delta events
   delta?: {
     usage?: Partial<MessageUsage>;
@@ -29,6 +31,8 @@ export interface ParsedMessage {
   timestamp: string;
   usage: MessageUsage;
   totalCostUsd: number | null;
+  /** Git branch this message was recorded on, if the tool reports it. */
+  gitBranch?: string | null;
 }
 
 export interface SessionData {

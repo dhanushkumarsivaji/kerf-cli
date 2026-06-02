@@ -608,6 +608,63 @@ Example:
 
 ---
 
+### CI / cost gates
+
+Attribute AI coding cost to a **git branch** and optionally fail a check when it's too high. kerf reads the **local** analytics DB, so these run where your usage data lives — your machine (e.g. a pre-push hook) or a runner that has your `~/.kerf/kerf.db`. Branch attribution comes from the `git_branch` recorded on each message (populated for sessions on a real branch; "HEAD"/detached is ignored).
+
+#### `kerf ci report`
+
+```bash
+kerf ci report                       # markdown for the current branch + repo
+kerf ci report --format json         # machine-readable
+kerf ci report --branch feature/x    # a specific branch (default: auto-detected)
+kerf ci report --any-project         # don't restrict to the current directory
+kerf ci report --since 2026-05-01    # only usage since a date
+```
+
+Branch is auto-detected from CI env (`GITHUB_HEAD_REF`/`GITHUB_REF_NAME`/…) then local git. Markdown output is ready to drop into a PR comment or `$GITHUB_STEP_SUMMARY`.
+
+#### `kerf ci gate`
+
+```bash
+kerf ci gate --max 5.00               # exit 1 if this branch's AI cost > $5
+kerf ci gate --max 5 --branch main    # gate a specific branch
+```
+
+Exit codes: `0` within limit, `1` over limit, `2` bad arguments — wire it straight into a CI step.
+
+#### GitHub Action
+
+A composite action ships at `.github/actions/kerf-cost`:
+
+```yaml
+- uses: dhanushkumarsivaji/kerf-cli/.github/actions/kerf-cost@main
+  with:
+    max-usd: "10"        # optional: fail the job over this amount
+    comment-summary: "true"
+```
+
+Or inline:
+
+```yaml
+- run: npx kerf-cli@latest ci report --format markdown >> $GITHUB_STEP_SUMMARY
+```
+
+> Honesty note: a stock cloud runner has no local kerf data, so it reports `$0.00`. This is meaningful on a self-hosted runner with the team's usage, or run locally as a pre-push gate. kerf stays local-first.
+
+#### `kerf roi` (exploratory)
+
+Rough "is it paying off" view — spend vs delivery (commits/merges) for the current repo:
+
+```bash
+kerf roi --period month    # $ spent, commits, merges, $/commit
+kerf roi --json
+```
+
+Marked exploratory: commit counts are a coarse proxy for output.
+
+---
+
 ## All commands at a glance
 
 | Command | What it does |
@@ -632,6 +689,9 @@ Example:
 | `kerf monitor` | Headless real-time anomaly alerts |
 | `kerf dashboard` | Web dashboard (localhost:3847) |
 | `kerf mcp` | MCP server — query costs from Claude Code/Cursor |
+| `kerf ci report` | Branch/PR AI cost as JSON or Markdown |
+| `kerf ci gate --max <usd>` | Fail CI when branch cost exceeds a limit |
+| `kerf roi` | Exploratory: spend vs commits/merges |
 | `kerf estimate <task>` | Pre-flight cost estimation |
 | `kerf estimate --compare <task>` | Compare Sonnet vs Opus vs Haiku |
 | `kerf budget set <amt> --period <p>` | Set project budget |

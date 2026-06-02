@@ -36,6 +36,12 @@ function extractTimestamp(raw: RawJsonlMessage): string {
   return raw.timestamp ?? dayjs().toISOString();
 }
 
+function extractGitBranch(raw: RawJsonlMessage): string | null {
+  const b = raw.gitBranch;
+  // Claude Code logs "HEAD" for a detached/unknown branch — treat as none.
+  return typeof b === "string" && b.length > 0 && b !== "HEAD" ? b : null;
+}
+
 export function parseJsonlLine(line: string): RawJsonlMessage | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
@@ -61,6 +67,7 @@ export function parseJsonlContent(content: string, sessionId: string): ParsedMes
     const id = extractMessageId(raw) ?? `anon_${anonymousCounter++}`;
     const model = extractModel(raw) ?? "unknown";
     const timestamp = extractTimestamp(raw);
+    const gitBranch = extractGitBranch(raw);
 
     const existing = messageMap.get(id);
     // Streaming JSONL emits partial usage updates per chunk; take MAX per field
@@ -85,6 +92,7 @@ export function parseJsonlContent(content: string, sessionId: string): ParsedMes
       timestamp,
       usage: parsedUsage,
       totalCostUsd: raw.total_cost_usd ?? existing?.totalCostUsd ?? null,
+      gitBranch: gitBranch ?? existing?.gitBranch ?? null,
     });
   }
 

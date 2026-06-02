@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-06-02
+
+### Added — CI/CD cost gates + ROI (Phase E2)
+- **Branch cost attribution:** the ingest now records each message's git branch
+  (`git_branch` column) — extracted from Claude Code's `gitBranch` and Codex's
+  `session_meta.git.branch`. "HEAD"/detached is treated as no branch. (Populated
+  for sessions recorded going forward.)
+- **`kerf ci report`** — AI cost attributable to the current branch as Markdown
+  (PR-comment / `$GITHUB_STEP_SUMMARY` ready) or JSON. Branch auto-detected from
+  CI env (`GITHUB_HEAD_REF`/`GITHUB_REF_NAME`/…) then local git.
+- **`kerf ci gate --max <usd>`** — exits `1` when the branch's cost exceeds the
+  threshold (`0` within, `2` bad args), to fail a CI check.
+- **GitHub composite action** at `.github/actions/kerf-cost` for PR cost summaries
+  and gating.
+- **`kerf roi`** (exploratory) — spend vs delivery (commits/merges) for the repo.
+
+### Notes
+- kerf stays local-first: `kerf ci` reads the local `~/.kerf/kerf.db`, so it's
+  meaningful where the usage data lives (your machine / a runner that has it).
+  A stock cloud runner with no local data reports $0.00.
+
 ## [3.2.0] - 2026-06-02
 
 ### Added — kerf MCP server (Phase E1)

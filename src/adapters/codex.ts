@@ -106,6 +106,12 @@ function extractModel(raw: any): string | null {
   return typeof model === "string" && model.length > 0 ? model : null;
 }
 
+/** Pull the git branch out of a session_meta/turn_context event. */
+function extractGitBranch(raw: any): string | null {
+  const b = raw?.payload?.git?.branch ?? raw?.git?.branch;
+  return typeof b === "string" && b.length > 0 && b !== "HEAD" ? b : null;
+}
+
 export class CodexAdapter implements IngestAdapter {
   readonly id: ToolId = "codex";
   readonly displayName = "Codex CLI";
@@ -147,6 +153,7 @@ export class CodexAdapter implements IngestAdapter {
     const sessionId = basename(file.filePath).replace(/\.jsonl$/, "");
     const messages: ParsedMessage[] = [];
     let currentModel = "unknown";
+    let currentBranch: string | null = null;
     let prevUsageKey: string | null = null;
     let index = 0;
 
@@ -160,9 +167,11 @@ export class CodexAdapter implements IngestAdapter {
         continue;
       }
 
-      // Track the active model from turn_context / session_meta events.
+      // Track the active model + branch from turn_context / session_meta events.
       const model = extractModel(raw);
       if (model) currentModel = model;
+      const branch = extractGitBranch(raw);
+      if (branch) currentBranch = branch;
 
       const usage = extractCodexUsage(raw);
       if (!usage) continue;
@@ -187,6 +196,7 @@ export class CodexAdapter implements IngestAdapter {
         timestamp: extractCodexTimestamp(raw),
         usage: merged,
         totalCostUsd: null, // computed downstream from pricing
+        gitBranch: currentBranch,
       });
     }
 

@@ -17,6 +17,8 @@ import { registerCacheCommand } from "./commands/cache.js";
 import { registerDoctorCommand } from "./commands/doctor.js";
 import { registerDashboardCommand } from "./commands/dashboard.js";
 import { registerMcpCommand } from "./commands/mcp.js";
+import { registerCiCommand } from "./commands/ci.js";
+import { registerRoiCommand } from "./commands/roi.js";
 
 declare const __KERF_VERSION__: string;
 
@@ -46,6 +48,8 @@ registerCacheCommand(program);
 registerDoctorCommand(program);
 registerDashboardCommand(program);
 registerMcpCommand(program);
+registerCiCommand(program);
+registerRoiCommand(program);
 
 // Default to watch if no command given
 program.action(async () => {

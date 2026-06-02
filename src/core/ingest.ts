@@ -38,8 +38,8 @@ export class IngestService {
       INSERT OR IGNORE INTO messages (
         message_id, session_id, project_path, model, timestamp,
         input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-        cost_usd, source_file, tool
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        cost_usd, source_file, tool, git_branch
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     this.upsertSessionMeta = db.prepare(`
@@ -166,6 +166,7 @@ export class IngestService {
           cost,
           sourceFile,
           tool,
+          msg.gitBranch ?? null,
         );
         if (result.changes > 0) inserted++;
       }
